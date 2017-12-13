@@ -16,4 +16,5 @@ int main(void)
 {
 	ft_putendl("server");
 	return(0);
+	
 }
