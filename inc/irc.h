@@ -14,5 +14,8 @@
 # define IRC_H
 
 # include "libft.h"
+# include <sys/socket.h>
+# include <netdb.h>
+// # include <.h>
 
 #endif
