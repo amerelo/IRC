@@ -23,8 +23,7 @@ SRC_CC := $(addprefix $(DIR_C), $(FILE_CC))
 SRC_SO := $(addprefix $(DIR_OS), $(FILE_SO))
 SRC_CO := $(addprefix $(DIR_OC), $(FILE_CO))
 
-FLAGS = -Wall -Wextra -Werror
-# -g
+FLAGS = -Wall -Wextra -Werror # -g
 
 LIBFT = ./libft/libft.a
 
@@ -38,8 +37,7 @@ $(DIR_OC):
 	mkdir -p $@
 
 obj/serv/%.o: src/serv/%.c
-	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H)
-	 # -ggdb
+	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H) # -ggdb
 
 obj/cli/%.o: src/cli/%.c
 	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H)

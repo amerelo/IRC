@@ -23,7 +23,7 @@
 # define FD_FREE	0
 # define FD_SERV	1
 # define FD_CLIENT	2
-# define BUF_SIZE	4096
+# define BUF_SIZE	2 //4096
 
 typedef struct	s_fd
 {

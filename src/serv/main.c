@@ -67,6 +67,7 @@ void	init_fd(t_env *e)
 	{
 		if (e->fds[i].type != FD_FREE)
 		{
+			ft_bzero(e->fds[i].buf_read, BUF_SIZE + 1);
 			FD_SET(i, &e->fd_read);
 			if (ft_strlen(e->fds[i].buf_write) > 0)
 				FD_SET(i, &e->fd_write);
@@ -102,7 +103,7 @@ void	client_read(t_env *e, int cs)
 			if ((e->fds[i].type == FD_CLIENT) && (i == cs))
 			{
 				ft_putstr(e->fds[cs].buf_read);
-				// send(i, e->fds[cs].buf_read, r, 0);
+				send(i, e->fds[cs].buf_read, r, 0);
 			}
 			i++;
 		}
@@ -116,9 +117,15 @@ void			srv_accept(t_env *e, int s)
 	socklen_t			csin_len;
 
 	csin_len = sizeof(csin);
+
+	ft_putendl("call of accept -> ");
+	ft_putnbr(s);
+	ft_putstr("\n");
 	if ((cs = accept(s, (struct sockaddr*)&csin, &csin_len)) == -1)
 		ft_putendl("accept error");
-	ft_putendl("New client");
+	ft_putstr("New client ");
+	ft_putnbr(cs);
+	ft_putstr("\n");
 	// printf("New client #%d from %s:%d\n", cs,
 	// inet_ntoa(csin.sin_addr), ntohs(csin.sin_port));
 	clean_fd(&e->fds[cs]);
@@ -140,7 +147,10 @@ void	check_fd(t_env *e)
 	while ((i < e->maxfd) && (e->r > 0))
 	{
 		if (FD_ISSET(i, &e->fd_read))
+		{
+			// ft_putendl("call of read");
 			e->fds[i].fct_read(e, i);
+		}
 		if (FD_ISSET(i, &e->fd_write))
 			e->fds[i].fct_write(e, i);
 		if (FD_ISSET(i, &e->fd_read) || FD_ISSET(i, &e->fd_write))
