@@ -47,26 +47,19 @@ int main(int ac, char **av)
 {
 	int				port;
 	int				sock;
-	// int				cs;
-	// unsigned int	sclen;
-	// struct sockaddr	scin;
-	// int				r;
-	// char			buf[BUF_SIZE + 1];
+	char 			buf[BUF_SIZE +1];
+	int				len;
 
 	if (ac != 3)
 		usage("need 3 args");
 
 	port = ft_atoi(av[2]);
 	sock = create_client(av[1], port);
-	// cs = accept(sock, (struct sockaddr*)&csin, &cslen);
-	// while ((r = read(cs, buf, BUF_SIZE) > 0))
-	// {
-	// 	buf[r] = '\0';
-	// 	ft_putstr(buf);
-	// }
-	// close(cs);
-	write(sock, "toto\0", 5);
-
-	close(sock);
+	while (1)
+	{
+		len = read(1, buf, BUF_SIZE);
+		buf[len] = '\0';
+		write(sock, buf, len);
+	}
 	return(0);
 }

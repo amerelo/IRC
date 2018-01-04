@@ -23,7 +23,7 @@
 # define FD_FREE	0
 # define FD_SERV	1
 # define FD_CLIENT	2
-# define BUF_SIZE	2 //4096
+# define BUF_SIZE	4096
 
 typedef struct	s_fd
 {
@@ -31,7 +31,7 @@ typedef struct	s_fd
 	void	(*fct_read)();
 	void	(*fct_write)();
 	char	buf_read[BUF_SIZE + 1];
-	char	buf_write[BUF_SIZE + 1];
+	// char	buf_write[BUF_SIZE + 1];
 }		t_fd;
 
 typedef struct	s_env
@@ -46,6 +46,11 @@ typedef struct	s_env
 }		t_env;
 
 void	srv_create(t_env *e, int port);
+
+void	check_fd(t_env *e);
+void	do_select(t_env *e);
+void	init_fd(t_env *e);
+
 // void	clean_fd(t_fd *fd);
 
 #endif
