@@ -50,7 +50,7 @@ void	srv_loop(t_env *e)
 	while (1)
 	{
 		init_fd(e);
-		do_select(e);
+		e->r = select(e->max + 1, &e->fd_read, NULL, NULL, NULL);
 		check_fd(e);
 	}
 }
@@ -90,34 +90,6 @@ void	init_fd(t_env *e)
 	}
 }
 
-int		cpy_n_str(char *dst, char *src, int *start)
-{
-	int	c;
-
-	c = 0;
-	if (src[*start] == '\0')
-		return (0);
-
-	while (src[(*start)] != '\0' && *start < *start + BUF_SIZE -1)
-	{
-		dst[c] = src[*start];
-		(*start)++;
-		c++;
-	}
-	return(1);
-}
-
-void	client_write(int cs, char *line)
-{
-	int			start;
-	static char	buf_write[BUF_SIZE + 1];
-
-	start = 0;
-	while (cpy_n_str(buf_write, line, &start) == 1)
-		send(cs, buf_write, ft_strlen(buf_write)+1 , 0);
-	ft_bzero(buf_write, ft_strlen(buf_write));
-}
-
 void	client_read(t_env *e, int cs)
 {
 	int	r;
@@ -125,20 +97,23 @@ void	client_read(t_env *e, int cs)
 	if (e->fds[cs].type != FD_CLIENT)
 		return ;
 
-	// need to put a while in order to get all message in one try
-	if ((r = recv(cs, e->fds[cs].buf_read, BUF_SIZE, 0)) > 0)
+	ft_bzero(e->fds[cs].buf_read, ft_strlen(e->fds[cs].buf_read));
+	while ((r = recv(cs, e->fds[cs].buf_read, BUF_SIZE, 0)) > 0)
 	{
 		e->fds[cs].buf_read[r] = '\0';
+		// ft_putnbr(r);
+		// ft_putstr(" rsv from clinet : ");
+		// ft_putendl(e->fds[cs].buf_read);
+
 		ft_putstr(e->fds[cs].buf_read);
-		client_write(cs, e->fds[cs].buf_read);
-		// send(cs, e->fds[cs].buf_read, r, 0);
+		send(cs, e->fds[cs].buf_read, r, 0);
+		if (ft_strchr(e->fds[cs].buf_read, '\n'))
+			return ;
+		ft_bzero(e->fds[cs].buf_read, ft_strlen(e->fds[cs].buf_read) + 1);
 	}
-	else
-	{
-		close(cs);
-		clean_fd(&e->fds[cs]);
-		printf("client #%d gone away\n", cs);
-	}
+	close(cs);
+	clean_fd(&e->fds[cs]);
+	printf("client #%d gone away\n", cs);
 }
 
 void	srv_accept(t_env *e, int s)
@@ -160,11 +135,6 @@ void	srv_accept(t_env *e, int s)
 	clean_fd(&e->fds[cs]);
 	e->fds[cs].type = FD_CLIENT;
 	e->fds[cs].fct_read = client_read;
-}
-
-void	do_select(t_env *e)
-{
-	e->r = select(e->max + 1, &e->fd_read, NULL, NULL, NULL);
 }
 
 void	check_fd(t_env *e)

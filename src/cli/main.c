@@ -41,10 +41,6 @@ int		create_client(char *addr, int port)
 	return (sock);
 }
 
-void	do_cli_select(t_cli *cli)
-{
-	cli->r = select(cli->max + 1, &cli->fd_read, NULL, NULL, NULL);
-}
 
 void	init_fdc(t_cli *cli)
 {
@@ -60,18 +56,22 @@ void	init_fdc(t_cli *cli)
 
 void	read_std_e(t_cli *cli)
 {
-	int		r;
-	char	buf[BUF_SIZE +1];
+	int			r;
+	static char	buf[BUF_SIZE +1];
 
 	ft_bzero(buf, BUF_SIZE +1);
-	if ((r = read(1, buf, BUF_SIZE)) > 0)
+	while ((r = read(1, buf, BUF_SIZE)) > 0)
 	{
 		buf[r] = '\0';
+		// ft_putnbr(r);
 		// ft_putstr("sending to server : ");
-		// ft_putstr(buf);
-		send(cli->fds[1], buf, BUF_SIZE +1 , 0);
+		// ft_putendl(buf);
+		send(cli->fds[1], buf, ft_strlen(buf), 0);
+		if (ft_strchr(buf, '\n'))
+			return ;
 		ft_bzero(buf, BUF_SIZE +1);
 	}
+	ft_putnbr(r);
 }
 
 void	resive_srv(t_cli *cli)
@@ -83,9 +83,8 @@ void	resive_srv(t_cli *cli)
 	if ((r = recv(cli->fds[1], buf, BUF_SIZE, 0)) > 0)
 	{
 		buf[r] = '\0';
+		// ft_putstr(" rcv -> ");
 		ft_putstr(buf);
-		// client_write(cs, cli->fds[cs].buf_read);
-		// send(cs, cli->fds[cs].buf_read, r, 0);
 	}
 	else
 	{
@@ -141,7 +140,7 @@ void	cli_loop(t_cli *cli)
 	while (1)
 	{
 		init_fdc(cli);
-		do_cli_select(cli);
+		cli->r = select(cli->max + 1, &cli->fd_read, NULL, NULL, NULL);
 		check_fdc(cli);
 	}
 }

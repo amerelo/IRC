@@ -26,7 +26,7 @@
 # define FD_SERV	1
 # define FD_CLIENT	2
 # define MAX_FD_CLI	2
-# define BUF_SIZE	4096
+# define BUF_SIZE	2//4096
 
 typedef struct	s_fd
 {
@@ -62,7 +62,6 @@ typedef struct	s_cli
 void	srv_create(t_env *e, int port);
 
 void	check_fd(t_env *e);
-void	do_select(t_env *e);
 void	init_fd(t_env *e);
 
 // void	clean_fd(t_fd *fd);
