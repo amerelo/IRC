@@ -12,8 +12,6 @@
 
 #include "irc.h"
 
-#include <stdio.h>
-
 void	usage(char *str)
 {
 	ft_putendl(str);
@@ -24,7 +22,7 @@ void	clean_fd(t_fd *fd)
 {
 	fd->type = FD_FREE;
 	fd->fct_read = NULL;
-	fd->fct_write = NULL;
+	// fd->fct_write = NULL;
 }
 
 void	init_env(t_env *e)
@@ -73,11 +71,15 @@ void	init_fd(t_env *e)
 	i = 0;
 	e->max = 0;
 	FD_ZERO(&e->fd_read);
-	FD_ZERO(&e->fd_write);
+	// FD_ZERO(&e->fd_write);
 	while (i < e->maxfd)
 	{
 		if (e->fds[i].type != FD_FREE)
 		{
+			// ft_putendl("init fd");
+			// ft_putnbr(i);
+			// ft_putendl("");
+
 			ft_bzero(e->fds[i].buf_read, BUF_SIZE + 1);
 			FD_SET(i, &e->fd_read);
 			// if (ft_strlen(e->fds[i].buf_write) > 0)
@@ -90,10 +92,9 @@ void	init_fd(t_env *e)
 
 int		cpy_n_str(char *dst, char *src, int *start)
 {
-	int c;
+	int	c;
 
 	c = 0;
-
 	if (src[*start] == '\0')
 		return (0);
 
@@ -103,21 +104,18 @@ int		cpy_n_str(char *dst, char *src, int *start)
 		(*start)++;
 		c++;
 	}
-
 	return(1);
 }
 
 void	client_write(int cs, char *line)
 {
-	int start;
+	int			start;
 	static char	buf_write[BUF_SIZE + 1];
 
 	start = 0;
 	while (cpy_n_str(buf_write, line, &start) == 1)
-	{
-		ft_strlen("send");
 		send(cs, buf_write, ft_strlen(buf_write)+1 , 0);
-	}
+	ft_bzero(buf_write, ft_strlen(buf_write));
 }
 
 void	client_read(t_env *e, int cs)
@@ -150,10 +148,6 @@ void	srv_accept(t_env *e, int s)
 	socklen_t			csin_len;
 
 	csin_len = sizeof(csin);
-
-	// ft_putendl("call of accept -> ");
-	// ft_putnbr(s);
-	// ft_putstr("\n");
 	if ((cs = accept(s, (struct sockaddr*)&csin, &csin_len)) == -1)
 		ft_putendl("accept error");
 
@@ -166,12 +160,11 @@ void	srv_accept(t_env *e, int s)
 	clean_fd(&e->fds[cs]);
 	e->fds[cs].type = FD_CLIENT;
 	e->fds[cs].fct_read = client_read;
-	e->fds[cs].fct_write = client_write;
 }
 
 void	do_select(t_env *e)
 {
-	e->r = select(e->max + 1, &e->fd_read, &e->fd_write, NULL, NULL);
+	e->r = select(e->max + 1, &e->fd_read, NULL, NULL, NULL);
 }
 
 void	check_fd(t_env *e)
@@ -186,9 +179,9 @@ void	check_fd(t_env *e)
 			// ft_putendl("\ncall of read");
 			e->fds[i].fct_read(e, i);
 		}
-		if (FD_ISSET(i, &e->fd_write))
-			e->fds[i].fct_write(e, i);
-		if (FD_ISSET(i, &e->fd_read) || FD_ISSET(i, &e->fd_write))
+		// if (FD_ISSET(i, &e->fd_write))
+		// 	e->fds[i].fct_write(e, i);
+		if (FD_ISSET(i, &e->fd_read)) // || FD_ISSET(i, &e->fd_write)
 			e->r--;
 		i++;
 	}
@@ -198,7 +191,6 @@ void	srv_create(t_env *e, int port)
 {
 	int		server_socket;
 	struct	sockaddr_in serv;
-	// fd_set	readfd;
 
 	if ((server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
 		usage("socket fail");
