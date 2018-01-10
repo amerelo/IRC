@@ -21,49 +21,96 @@
 
 #include <stdio.h> //<< rm
 
+# define FD_FREE			0
+# define FD_SERV			1
+# define FD_CLIENT			2
+# define MAX_FD_CLI			2
+# define NAME_SIZE			9
 
-# define FD_FREE	0
-# define FD_SERV	1
-# define FD_CLIENT	2
-# define MAX_FD_CLI	2
-# define BUF_SIZE	2//4096
+# define BUF_E_READ			1024
+# define BUF_SUB			2
+# define SMS_PACKET_SIZE	512
 
-typedef struct	s_fd
+# if BUF_SUB > SMS_PACKET_SIZE
+#  error "Buffer subdivision is greater that the packet size !"
+# endif
+
+# if BUF_SUB < 0
+#  error "Buffer subdivision is negative !"
+# endif
+
+#define SMS_MOD (SMS_PACKET_SIZE % BUF_SUB)
+
+# if SMS_MOD != 0
+#  error "Buffer subdivision size is not a multiple of packet size !"
+# endif
+
+enum types
 {
-	int			type;
-	void		(*fct_read)();
-	// void		(*fct_write)();
-	char		buf_read[BUF_SIZE + 1];
-	// char	buf_write[BUF_SIZE + 1];
-}				t_fd;
+	CONNECT,
+	NICK,
+	JOIN,
+	LEAVE,
+	WHO,
+	MSG,
+	GMSG
+};
 
-typedef struct	s_env
+typedef struct		s_sms_header
 {
-	t_fd		*fds;
-	int			port;
-	int			maxfd;
-	int			max;
-	int			r;
-	fd_set		fd_read;
-}				t_env;
+	enum types		mytype;
+}					t_sms_header;
 
-typedef struct	s_cli
+# define SMS_SIZE	SMS_PACKET_SIZE - sizeof(t_sms_header)
+
+typedef struct		s_sms
 {
-	int			port;
-	int			max;
-	int			r;
-	int			type1;
-	int			type2;
-	fd_set		fd_read;
-	int			fds[MAX_FD_CLI];
-	char		buf[BUF_SIZE +1];
-}				t_cli;
+	t_sms_header	header;
+	char			sms[SMS_SIZE];
+}					t_sms;
 
-void	srv_create(t_env *e, int port);
+# define BUF_SIZE	(sizeof(t_sms) / BUF_SUB)
 
-void	check_fd(t_env *e);
-void	init_fd(t_env *e);
+typedef struct		s_fd
+{
+	int				type;
+	int				room;
+	int				sizeread;
+	void			(*fct_read)();
+	char			buf_read[BUF_SIZE + 1];
+	char			name[NAME_SIZE + 1];
+	char			*struct_sms;
+}					t_fd;
 
+typedef struct		s_cli
+{
+	int				port;
+	int				max;
+	int				r;
+	int				type1;
+	int				type2;
+	fd_set			fd_read;
+	int				fds[MAX_FD_CLI];
+	char			buf[BUF_SIZE +1];
+	char			name[NAME_SIZE + 1];
+	// int			chan;
+	// char			chan_name[NAME_SIZE + 1];
+}					t_cli;
+
+typedef struct		s_env
+{
+	t_fd			*fds;
+	int				port;
+	int				maxfd;
+	int				max;
+	int				r;
+	fd_set			fd_read;
+}					t_env;
+
+void				srv_create(t_env *e, int port);
+
+void				check_fd(t_env *e);
+void				init_fd(t_env *e);
 // void	clean_fd(t_fd *fd);
 
 #endif

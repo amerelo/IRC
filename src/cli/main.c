@@ -41,7 +41,6 @@ int		create_client(char *addr, int port)
 	return (sock);
 }
 
-
 void	init_fdc(t_cli *cli)
 {
 	cli->max = 0;
@@ -54,43 +53,69 @@ void	init_fdc(t_cli *cli)
 	cli->max = cli->fds[1];
 }
 
+void	send_packet(t_cli *cli, t_sms *sms)
+{
+	size_t	start;
+
+	start = 0;
+	while (start < sizeof(*sms))
+	{
+		printf("start: %lu - %lu\n", start, sizeof(*sms));
+		unsigned char *send_addr = ((unsigned char *)sms) + start;
+		send(cli->fds[1], send_addr, BUF_SIZE, 0);
+		start += BUF_SIZE;
+	}
+}
+
+void	send_to_serv(char* txt, t_cli *cli)
+{
+	size_t	offset;
+	char	buff[SMS_SIZE + 1];
+	t_sms	sms;
+
+	sms.header.mytype = MSG;
+	offset = 0;
+	while (ft_strlen(txt) >= offset)
+	{
+		ft_strncpy(buff, txt + offset, SMS_SIZE);
+		buff[SMS_SIZE] = 0;
+		ft_memcpy(sms.sms, buff, SMS_SIZE + 1);
+		send_packet(cli, &sms);
+		offset += SMS_SIZE;
+	}
+}
+
 void	read_std_e(t_cli *cli)
 {
 	int			r;
-	static char	buf[BUF_SIZE +1];
+	static char	buf[BUF_E_READ +1];
 
-	ft_bzero(buf, BUF_SIZE +1);
-	while ((r = read(1, buf, BUF_SIZE)) > 0)
+	ft_bzero(buf, BUF_E_READ +1);
+	while ((r = read(1, buf, BUF_E_READ)) > 0)
 	{
-		buf[r] = '\0';
-		// ft_putnbr(r);
-		// ft_putstr("sending to server : ");
-		// ft_putendl(buf);
-		send(cli->fds[1], buf, ft_strlen(buf), 0);
+		send_to_serv(buf, cli);
 		if (ft_strchr(buf, '\n'))
 			return ;
-		ft_bzero(buf, BUF_SIZE +1);
+		// ft_bzero(buf, BUF_E_READ +1);
 	}
-	ft_putnbr(r);
 }
 
 void	resive_srv(t_cli *cli)
 {
-	int	r;
+	int		r;
 	char	buf[BUF_SIZE +1];
 
-	// need to put a while in order to get all message in one try
+	// need to put a while in order to get all message in one try ?
 	if ((r = recv(cli->fds[1], buf, BUF_SIZE, 0)) > 0)
 	{
 		buf[r] = '\0';
-		// ft_putstr(" rcv -> ");
 		ft_putstr(buf);
 	}
 	else
 	{
 		close(cli->fds[1]);
 		// clean_fd(&e->fds[cs]);
-		ft_putendl("server gone away");
+		ft_putendl("Server Error");
 		exit(2);
 	}
 }
@@ -139,6 +164,8 @@ void	cli_loop(t_cli *cli)
 {
 	while (1)
 	{
+		if (cli)
+
 		init_fdc(cli);
 		cli->r = select(cli->max + 1, &cli->fd_read, NULL, NULL, NULL);
 		check_fdc(cli);
@@ -159,11 +186,5 @@ int		main(int ac, char **av)
 	// cli.type1 = FD_SERV;
 	// cli.type2 = FD_SERV;
 	cli_loop(&cli);
-	// while (1)
-	// {
-	// 	len = read(1, buf, BUF_SIZE);
-	// 	buf[len] = '\0';
-	// 	write(sock, buf, len);
-	// }
 	return(0);
 }

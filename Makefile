@@ -23,7 +23,7 @@ SRC_CC := $(addprefix $(DIR_C), $(FILE_CC))
 SRC_SO := $(addprefix $(DIR_OS), $(FILE_SO))
 SRC_CO := $(addprefix $(DIR_OC), $(FILE_CO))
 
-FLAGS = -Wall -Wextra -Werror # -g
+FLAGS = -Wall -Wextra -Werror -fsanitize=address -g
 
 LIBFT = ./libft/libft.a
 

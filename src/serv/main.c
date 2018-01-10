@@ -25,6 +25,34 @@ void	clean_fd(t_fd *fd)
 	// fd->fct_write = NULL;
 }
 
+// char		*ft_strjoin_free(char *s1, char *s2, int s)
+// {
+// 	int		x;
+// 	int		y;
+// 	char	*sol;
+//
+// 	x = s1 != NULL ? ft_strlen(s1) : 0;
+// 	y = s2 != NULL ? ft_strlen(s2) : 0;
+// 	sol = (char *)ft_memalloc(sizeof(char) * (x + y + 1));
+// 	x = 0;
+// 	while (s1 && s1[x])
+// 	{
+// 		sol[x] = s1[x];
+// 		x++;
+// 	}
+// 	if (s1 && (s == 1 || s == 3))
+// 		free(s1);
+// 	y = 0;
+// 	while (s2 && s2[y])
+// 	{
+// 		sol[x + y] = s2[y];
+// 		y++;
+// 	}
+// 	if (s2 && (s == 2 || s == 3))
+// 		free(s2);
+// 	return (sol);
+// }
+
 void	init_env(t_env *e)
 {
 	int				i;
@@ -41,6 +69,7 @@ void	init_env(t_env *e)
 	while (i < e->maxfd)
 	{
 		clean_fd(&e->fds[i]);
+		e->fds[i].sizeread = 0;
 		i++;
 	}
 }
@@ -92,24 +121,23 @@ void	init_fd(t_env *e)
 
 void	client_read(t_env *e, int cs)
 {
-	int	r;
+	int		r;
+	size_t	offset;
+	t_sms	sms;
 
 	if (e->fds[cs].type != FD_CLIENT)
 		return ;
 
-	ft_bzero(e->fds[cs].buf_read, ft_strlen(e->fds[cs].buf_read));
-	while ((r = recv(cs, e->fds[cs].buf_read, BUF_SIZE, 0)) > 0)
+	offset = 0;
+	while ((r = recv(cs, ((void *)&sms) + offset, BUF_SIZE, 0)) > 0)
 	{
-		e->fds[cs].buf_read[r] = '\0';
-		// ft_putnbr(r);
-		// ft_putstr(" rsv from clinet : ");
-		// ft_putendl(e->fds[cs].buf_read);
-
-		ft_putstr(e->fds[cs].buf_read);
-		send(cs, e->fds[cs].buf_read, r, 0);
-		if (ft_strchr(e->fds[cs].buf_read, '\n'))
+		offset += BUF_SIZE;
+		if (offset == sizeof(t_sms))
+		{
+			ft_putstr(sms.sms);
+			send(cs, sms.sms, ft_strlen(sms.sms), 0);
 			return ;
-		ft_bzero(e->fds[cs].buf_read, ft_strlen(e->fds[cs].buf_read) + 1);
+		}
 	}
 	close(cs);
 	clean_fd(&e->fds[cs]);
@@ -126,15 +154,17 @@ void	srv_accept(t_env *e, int s)
 	if ((cs = accept(s, (struct sockaddr*)&csin, &csin_len)) == -1)
 		ft_putendl("accept error");
 
-	ft_putstr("New client ");
-	ft_putnbr(cs);
-	ft_putstr("\n");
-
 	// printf("New client #%d from %s:%d\n", cs,
 	// inet_ntoa(csin.sin_addr), ntohs(csin.sin_port));
 	clean_fd(&e->fds[cs]);
 	e->fds[cs].type = FD_CLIENT;
 	e->fds[cs].fct_read = client_read;
+
+	ft_strncpy(e->fds[cs].name, "user00001", NAME_SIZE);
+	e->fds[cs].name[NAME_SIZE] = '\0';
+
+	ft_putstr("New client ");
+	ft_putendl(e->fds[cs].name);
 }
 
 void	check_fd(t_env *e)
@@ -169,6 +199,10 @@ void	srv_create(t_env *e, int port)
 	serv.sin_family = AF_INET;
 	serv.sin_port = htons(port);
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	int option_true = 1;
+
+	setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option_true, sizeof(option_true));
 
 	if (bind(server_socket , (struct sockaddr*)&serv, sizeof(serv) ) == -1)
 		usage("socket fail");
