@@ -26,6 +26,7 @@
 # define FD_CLIENT			2
 # define MAX_FD_CLI			2
 # define NAME_SIZE			9
+# define ROOM_NAME_SIZE		12
 
 # define BUF_E_READ			1024
 # define BUF_SUB			2
@@ -56,6 +57,7 @@ enum types
 	GMSG
 };
 
+
 typedef struct		s_sms_header
 {
 	enum types		mytype;
@@ -82,6 +84,14 @@ typedef struct		s_fd
 	char			*struct_sms;
 }					t_fd;
 
+typedef struct		s_info
+{
+	int				connected;
+	char			chan[ROOM_NAME_SIZE + 1];
+	char			name[NAME_SIZE + 1];
+}					t_info;
+
+
 typedef struct		s_cli
 {
 	int				port;
@@ -92,9 +102,7 @@ typedef struct		s_cli
 	fd_set			fd_read;
 	int				fds[MAX_FD_CLI];
 	char			buf[BUF_SIZE +1];
-	char			name[NAME_SIZE + 1];
-	// int			chan;
-	// char			chan_name[NAME_SIZE + 1];
+	t_info			info;
 }					t_cli;
 
 typedef struct		s_env
@@ -106,6 +114,13 @@ typedef struct		s_env
 	int				r;
 	fd_set			fd_read;
 }					t_env;
+
+
+typedef struct		s_cmd
+{
+	char			c[ROOM_NAME_SIZE + 1];
+	void			(*cmds)(char*, t_cli *);
+} 					t_cmd;
 
 void				srv_create(t_env *e, int port);
 

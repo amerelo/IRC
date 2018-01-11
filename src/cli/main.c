@@ -48,9 +48,13 @@ void	init_fdc(t_cli *cli)
 
 	ft_bzero(cli->buf, BUF_SIZE + 1);
 	FD_SET(cli->fds[0], &cli->fd_read);
-	FD_SET(cli->fds[1], &cli->fd_read);
-
-	cli->max = cli->fds[1];
+	if (cli->info.connected)
+	{
+		FD_SET(cli->fds[1], &cli->fd_read);
+		cli->max = cli->fds[1];
+	}
+	else
+		cli->max = cli->fds[0];
 }
 
 void	send_packet(t_cli *cli, t_sms *sms)
@@ -85,6 +89,83 @@ void	send_to_serv(char* txt, t_cli *cli)
 	}
 }
 
+void	ft_connect(char *buf, t_cli *cli)
+{
+	int		i;
+	char	**server_ip;
+
+
+	(void)cli;
+	ft_strsplit(buf, ' ');
+	while()
+	{
+
+	}
+	printf("%s = %s\n", "ft_connect", buf);
+	ft_strchr(buf, ' ');
+	ft_strchr();
+	// connect_to_server(cli, int port, char *ip);
+}
+
+void	ft_nick(char *buf, t_cli *cli)
+{
+	(void)cli;
+	printf("%s = %s, \n", "ft_nick", buf);
+}
+
+void	ft_join(char *buf, t_cli *cli)
+{
+	(void)cli;
+	printf("%s = %s, \n", "ft_join", buf);
+}
+
+void	ft_leave(char *buf, t_cli *cli)
+{
+	(void)cli;
+	printf("%s = %s, \n", "ft_leave", buf);
+}
+
+void	ft_gmsg(char *buf, t_cli *cli)
+{
+	(void)cli;
+	printf("%s = %s, \n", "ft_gmsg", buf);
+}
+
+int		execut_command(char *cmd, t_cli *cli)
+{
+	int i;
+	// {"/gmsg", &ft_gmsg},
+	static t_cmd tab[] = {
+		{"/connect", &ft_connect}, {"/nick", &ft_nick},
+		{"/join", &ft_join}, {"/leave", &ft_leave},
+		{"NONE", NULL}
+	};
+
+	i = 0;
+	while (ft_strcmp(tab[i].c, "NONE") != 0)
+	{
+		if (ft_strncmp(cmd, tab[i].c, ft_strlen(tab[i].c)) == 0)
+		{
+			tab[i].cmds(cmd, cli);
+			return (1);
+		}
+		i++;
+	}
+	return (0);
+}
+
+void	pars_command(char *buf, t_cli *cli)
+{
+	// int command;
+
+	execut_command(buf, cli);
+	// if (*buf != '/' || (command = get_command(buf)) == 0)
+	// {
+	//    ft_putendl("ERROR command found !");
+	//    return ;
+	// }
+}
+
 void	read_std_e(t_cli *cli)
 {
 	int			r;
@@ -93,7 +174,8 @@ void	read_std_e(t_cli *cli)
 	ft_bzero(buf, BUF_E_READ +1);
 	while ((r = read(1, buf, BUF_E_READ)) > 0)
 	{
-		send_to_serv(buf, cli);
+		pars_command(buf, cli);
+		// send_to_serv(buf, cli);
 		if (ft_strchr(buf, '\n'))
 			return ;
 		// ft_bzero(buf, BUF_E_READ +1);
@@ -123,20 +205,50 @@ void	resive_srv(t_cli *cli)
 void	check_fdc(t_cli *cli)
 {
 	if (FD_ISSET(cli->fds[0], &cli->fd_read))
-	{
-		// ft_putendl("read from standar");
 		read_std_e(cli);
-	}
-	if (FD_ISSET(cli->fds[1], &cli->fd_read))
-	{
+	if (cli->info.connected && FD_ISSET(cli->fds[1], &cli->fd_read))
 		resive_srv(cli);
-	}
 
-	if (FD_ISSET(cli->fds[0], &cli->fd_read) ||
-	FD_ISSET(cli->fds[1], &cli->fd_read))
+	if (FD_ISSET(cli->fds[0], &cli->fd_read) || (cli->info.connected &&
+	FD_ISSET(cli->fds[1], &cli->fd_read)))
 		cli->r--;
-	// if (FD_ISSET(i, &cli->fd_write))
-	// 	cli->fds[i].fct_write(e, i);
+}
+
+void	cli_loop(t_cli *cli)
+{
+	while (1)
+	{
+		// if (cli)
+		init_fdc(cli);
+		cli->r = select(cli->max + 1, &cli->fd_read, NULL, NULL, NULL);
+		check_fdc(cli);
+	}
+}
+
+void	connect_to_server(t_cli *cli, int port, char *ip)
+{
+	cli->port = port; // av[2]
+	cli->fds[1] = create_client(ip, cli->port); // av[1]
+}
+
+void	init_client(t_cli *cli)
+{
+	cli->fds[0] = 1;
+	cli->fds[1] = 0;
+	cli->info.connected = 0;
+	ft_strncpy(cli->info.chan, "NONE", 4);
+	cli->info.chan[4] = '\0';
+	ft_strncpy(cli->info.name, "NONE", 4);
+	cli->info.name[4] = '\0';
+}
+
+int		main(void)
+{
+	t_cli	cli;
+
+	init_client(&cli);
+	cli_loop(&cli);
+	return(0);
 }
 
 // void	srv_accept(t_env *e, int s)
@@ -159,32 +271,3 @@ void	check_fdc(t_cli *cli)
 // 	e->fds[cs].type = FD_CLIENT;
 // 	e->fds[cs].fct_read = client_read;
 // }
-
-void	cli_loop(t_cli *cli)
-{
-	while (1)
-	{
-		if (cli)
-
-		init_fdc(cli);
-		cli->r = select(cli->max + 1, &cli->fd_read, NULL, NULL, NULL);
-		check_fdc(cli);
-	}
-}
-
-int		main(int ac, char **av)
-{
-	t_cli	cli;
-
-	if (ac != 3)
-		usage("need 3 args");
-
-	cli.port = ft_atoi(av[2]);
-	cli.fds[0] = 1;
-	cli.fds[1] = create_client(av[1], cli.port);
-
-	// cli.type1 = FD_SERV;
-	// cli.type2 = FD_SERV;
-	cli_loop(&cli);
-	return(0);
-}
