@@ -48,6 +48,7 @@
 
 enum types
 {
+	NONE,
 	CONNECT,
 	NICK,
 	JOIN,
@@ -56,7 +57,6 @@ enum types
 	MSG,
 	GMSG
 };
-
 
 typedef struct		s_sms_header
 {
@@ -81,6 +81,7 @@ typedef struct		s_fd
 	void			(*fct_read)();
 	char			buf_read[BUF_SIZE + 1];
 	char			name[NAME_SIZE + 1];
+	char			chan[ROOM_NAME_SIZE + 1];
 	char			*struct_sms;
 }					t_fd;
 
@@ -90,7 +91,6 @@ typedef struct		s_info
 	char			chan[ROOM_NAME_SIZE + 1];
 	char			name[NAME_SIZE + 1];
 }					t_info;
-
 
 typedef struct		s_cli
 {
@@ -115,12 +115,18 @@ typedef struct		s_env
 	fd_set			fd_read;
 }					t_env;
 
-
 typedef struct		s_cmd
 {
 	char			c[ROOM_NAME_SIZE + 1];
 	void			(*cmds)(char*, t_cli *);
 } 					t_cmd;
+
+typedef struct		s_smd
+{
+	enum types 		type;
+	void			(*cmds)(char*, t_env *);
+} 					t_smd;
+
 
 void				srv_create(t_env *e, int port);
 

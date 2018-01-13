@@ -19,7 +19,7 @@ void	usage(char *str)
 	exit(2);
 }
 
-int		create_client(char *addr, int port)
+int		connect_client(char *addr, int port, t_cli *cli)
 {
 	int					sock;
 	struct protoent		*proto;
@@ -36,8 +36,9 @@ int		create_client(char *addr, int port)
 	if (connect(sock, (const struct sockaddr*)&sin, sizeof(sin)) == -1)
 	{
 		ft_putendl("Connect error");
-		exit(2);
+		return (cli->fds[1]);
 	}
+	cli->info.connected = 1;
 	return (sock);
 }
 
@@ -71,13 +72,13 @@ void	send_packet(t_cli *cli, t_sms *sms)
 	}
 }
 
-void	send_to_serv(char* txt, t_cli *cli)
+void	send_to_serv(char* txt, t_cli *cli, enum types test)
 {
 	size_t	offset;
 	char	buff[SMS_SIZE + 1];
 	t_sms	sms;
 
-	sms.header.mytype = MSG;
+	sms.header.mytype = test;
 	offset = 0;
 	while (ft_strlen(txt) >= offset)
 	{
@@ -89,52 +90,118 @@ void	send_to_serv(char* txt, t_cli *cli)
 	}
 }
 
+void	free_tab(char **tab)
+{
+	int i;
+
+	i = 0;
+	while (tab[i])
+	{
+		free(tab[i]);
+		i++;
+	}
+	free(tab);
+}
+
+int		verif_narg(char **tab, int limit)
+{
+	int i;
+
+	i = 0;
+	while (tab[i])
+	{
+		if (i >= limit)
+			return (1);
+		i++;
+	}
+	return ((i != limit) ? 1 : 0);
+}
+
 void	ft_connect(char *buf, t_cli *cli)
 {
-	int		i;
-	char	**server_ip;
+	char **tab;
+	char *tmp;
 
-
-	(void)cli;
-	ft_strsplit(buf, ' ');
-	while()
+	ft_putendl(buf);
+	if (cli->info.connected)
 	{
-
+		ft_putendl("already connected");
+		return ;
 	}
-	printf("%s = %s\n", "ft_connect", buf);
-	ft_strchr(buf, ' ');
-	ft_strchr();
-	// connect_to_server(cli, int port, char *ip);
+	tmp = ft_strrchr(buf, '\n');
+	*tmp = '\0';
+	tab = ft_strsplit(buf, ' ');
+	if (verif_narg(tab, 3))
+	{
+		ft_putendl("connect need [machine] [port]");
+		free_tab(tab);
+		return ;
+	}
+	cli->port = ft_atoi(tab[2]);
+	cli->fds[1] = connect_client(tab[1], cli->port, cli);
+	free_tab(tab);
 }
 
 void	ft_nick(char *buf, t_cli *cli)
 {
-	(void)cli;
-	printf("%s = %s, \n", "ft_nick", buf);
+	char	**tab;
+	char	*tmp;
+
+	tmp = ft_strrchr(buf, '\n');
+	*tmp = '\0';
+	tab = ft_strsplit(buf, ' ');
+	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > NAME_SIZE))
+	{
+		ft_putstr("Nick need [nick-name]-");
+		ft_putnbr(NAME_SIZE);
+		ft_putendl("-maxsize");
+		free_tab(tab);
+		return ;
+	}
+	send_to_serv(tab[1], cli, NICK);
+	free_tab(tab);
 }
 
 void	ft_join(char *buf, t_cli *cli)
 {
-	(void)cli;
-	printf("%s = %s, \n", "ft_join", buf);
+	char	**tab;
+	char	*tmp;
+
+	tmp = ft_strrchr(buf, '\n');
+	*tmp = '\0';
+	tab = ft_strsplit(buf, ' ');
+	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > NAME_SIZE))
+	{
+		ft_putstr("Join need [room-name]-");
+		ft_putnbr(ROOM_NAME_SIZE);
+		ft_putendl("-maxsize");
+		free_tab(tab);
+		return ;
+	}
+	send_to_serv(tab[1], cli, JOIN);
+	free_tab(tab);
 }
 
 void	ft_leave(char *buf, t_cli *cli)
 {
-	(void)cli;
-	printf("%s = %s, \n", "ft_leave", buf);
+	send_to_serv(buf, cli, LEAVE);
+}
+
+void	ft_msg(char *buf, t_cli *cli)
+{
+	// pars buf
+	send_to_serv(buf, cli, MSG);
 }
 
 void	ft_gmsg(char *buf, t_cli *cli)
 {
-	(void)cli;
-	printf("%s = %s, \n", "ft_gmsg", buf);
+	if (cli->info.connected)
+		send_to_serv(buf, cli, GMSG);
 }
 
-int		execut_command(char *cmd, t_cli *cli)
+void	execut_command(char *cmd, t_cli *cli)
 {
 	int i;
-	// {"/gmsg", &ft_gmsg},
 	static t_cmd tab[] = {
 		{"/connect", &ft_connect}, {"/nick", &ft_nick},
 		{"/join", &ft_join}, {"/leave", &ft_leave},
@@ -142,28 +209,19 @@ int		execut_command(char *cmd, t_cli *cli)
 	};
 
 	i = 0;
-	while (ft_strcmp(tab[i].c, "NONE") != 0)
+	while (ft_strncmp(tab[i].c, "NONE", 4) != 0)
 	{
 		if (ft_strncmp(cmd, tab[i].c, ft_strlen(tab[i].c)) == 0)
 		{
 			tab[i].cmds(cmd, cli);
-			return (1);
+			return ;
 		}
 		i++;
 	}
-	return (0);
-}
-
-void	pars_command(char *buf, t_cli *cli)
-{
-	// int command;
-
-	execut_command(buf, cli);
-	// if (*buf != '/' || (command = get_command(buf)) == 0)
-	// {
-	//    ft_putendl("ERROR command found !");
-	//    return ;
-	// }
+	if (cmd[0] == '/')
+		ft_putendl("command not fund");
+	else
+		ft_gmsg(cmd, cli);
 }
 
 void	read_std_e(t_cli *cli)
@@ -174,11 +232,10 @@ void	read_std_e(t_cli *cli)
 	ft_bzero(buf, BUF_E_READ +1);
 	while ((r = read(1, buf, BUF_E_READ)) > 0)
 	{
-		pars_command(buf, cli);
-		// send_to_serv(buf, cli);
+		execut_command(buf, cli);
 		if (ft_strchr(buf, '\n'))
 			return ;
-		// ft_bzero(buf, BUF_E_READ +1);
+		ft_bzero(buf, BUF_E_READ +1);
 	}
 }
 
@@ -208,7 +265,6 @@ void	check_fdc(t_cli *cli)
 		read_std_e(cli);
 	if (cli->info.connected && FD_ISSET(cli->fds[1], &cli->fd_read))
 		resive_srv(cli);
-
 	if (FD_ISSET(cli->fds[0], &cli->fd_read) || (cli->info.connected &&
 	FD_ISSET(cli->fds[1], &cli->fd_read)))
 		cli->r--;
@@ -218,17 +274,10 @@ void	cli_loop(t_cli *cli)
 {
 	while (1)
 	{
-		// if (cli)
 		init_fdc(cli);
 		cli->r = select(cli->max + 1, &cli->fd_read, NULL, NULL, NULL);
 		check_fdc(cli);
 	}
-}
-
-void	connect_to_server(t_cli *cli, int port, char *ip)
-{
-	cli->port = port; // av[2]
-	cli->fds[1] = create_client(ip, cli->port); // av[1]
 }
 
 void	init_client(t_cli *cli)

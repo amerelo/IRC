@@ -84,6 +84,40 @@ void	init_fd(t_env *e)
 	}
 }
 
+void	ft_nick(char *sms, t_env *e)
+{
+	(void)sms;
+	(void)e;
+}
+
+void	ft_join(char *sms, t_env *e)
+{
+	(void)sms;
+	(void)e;
+}
+
+void	ft_leave(char *sms, t_env *e)
+{
+	(void)sms;
+	(void)e;
+}
+
+void	handle_command(t_env *e, t_sms *sms)
+{
+	int i;
+	static t_smd tab[] = {
+		{NICK, &ft_nick}, {JOIN, &ft_join}, {LEAVE, &ft_leave},
+		{NONE, NULL}
+	};
+
+	i = 0;
+	while (tab[i].type != NONE)
+	{
+		if (tab[i].type == sms->header.mytype)
+			tab[i].cmds(sms->sms, e);
+	}
+}
+
 void	client_read(t_env *e, int cs)
 {
 	int		r;
@@ -92,15 +126,14 @@ void	client_read(t_env *e, int cs)
 
 	if (e->fds[cs].type != FD_CLIENT)
 		return ;
-
 	offset = 0;
 	while ((r = recv(cs, ((void *)&sms) + offset, BUF_SIZE, 0)) > 0)
 	{
 		offset += BUF_SIZE;
 		if (offset == sizeof(t_sms))
 		{
-			ft_putstr(sms.sms);
-			send(cs, sms.sms, ft_strlen(sms.sms), 0);
+			// ft_putstr(sms.sms);
+			// send(cs, sms.sms, ft_strlen(sms.sms), 0);
 			return ;
 		}
 	}
@@ -124,10 +157,10 @@ void	srv_accept(t_env *e, int s)
 	clean_fd(&e->fds[cs]);
 	e->fds[cs].type = FD_CLIENT;
 	e->fds[cs].fct_read = client_read;
-
-	// ft_strncpy(e->fds[cs].name, "user00001", NAME_SIZE);
-	// e->fds[cs].name[NAME_SIZE] = '\0';
-
+	ft_strncpy(e->fds[cs].name, "NONE", 4);
+	e->fds[cs].name[4] = '\0';
+	ft_strncpy(e->fds[cs].chan, "NONE", 4);
+	e->fds[cs].chan[4] = '\0';
 	ft_putstr("New client ");
 	ft_putendl(e->fds[cs].name);
 }
@@ -167,7 +200,6 @@ void	srv_create(t_env *e, int port)
 
 	int option_true = 1;
 	setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option_true, sizeof(option_true));
-
 	if (bind(server_socket , (struct sockaddr*)&serv, sizeof(serv) ) == -1)
 		usage("socket fail");
 	if (listen(server_socket, 42) == -1)
