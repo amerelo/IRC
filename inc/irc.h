@@ -76,13 +76,12 @@ typedef struct		s_sms
 typedef struct		s_fd
 {
 	int				type;
-	int				room;
-	int				sizeread;
+	// char			*struct_sms;
+	int				client;
 	void			(*fct_read)();
 	char			buf_read[BUF_SIZE + 1];
 	char			name[NAME_SIZE + 1];
 	char			chan[ROOM_NAME_SIZE + 1];
-	char			*struct_sms;
 }					t_fd;
 
 typedef struct		s_info
@@ -121,13 +120,19 @@ typedef struct		s_cmd
 	void			(*cmds)(char*, t_cli *);
 } 					t_cmd;
 
+typedef struct		s_ccmd
+{
+	enum types 		type;
+	void			(*ccmds)(char*, t_cli *);
+} 					t_ccmd;
+
 typedef struct		s_smd
 {
 	enum types 		type;
-	void			(*cmds)(char*, t_env *);
+	void			(*cmds)(char*, t_env *, int);
 } 					t_smd;
 
-
+void				send_to_client(char* txt, int cs, enum types type);
 void				srv_create(t_env *e, int port);
 
 void				check_fd(t_env *e);

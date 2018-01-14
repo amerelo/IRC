@@ -61,24 +61,25 @@ void	init_fdc(t_cli *cli)
 void	send_packet(t_cli *cli, t_sms *sms)
 {
 	size_t	start;
+	unsigned char *send_addr;
 
 	start = 0;
 	while (start < sizeof(*sms))
 	{
 		printf("start: %lu - %lu\n", start, sizeof(*sms));
-		unsigned char *send_addr = ((unsigned char *)sms) + start;
+		send_addr = ((unsigned char *)sms) + start;
 		send(cli->fds[1], send_addr, BUF_SIZE, 0);
 		start += BUF_SIZE;
 	}
 }
 
-void	send_to_serv(char* txt, t_cli *cli, enum types test)
+void	send_to_serv(char* txt, t_cli *cli, enum types type)
 {
 	size_t	offset;
 	char	buff[SMS_SIZE + 1];
 	t_sms	sms;
 
-	sms.header.mytype = test;
+	sms.header.mytype = type;
 	offset = 0;
 	while (ft_strlen(txt) >= offset)
 	{
@@ -117,7 +118,7 @@ int		verif_narg(char **tab, int limit)
 	return ((i != limit) ? 1 : 0);
 }
 
-void	ft_connect(char *buf, t_cli *cli)
+void	ft_sendconnect(char *buf, t_cli *cli)
 {
 	char **tab;
 	char *tmp;
@@ -142,19 +143,25 @@ void	ft_connect(char *buf, t_cli *cli)
 	free_tab(tab);
 }
 
-void	ft_nick(char *buf, t_cli *cli)
+void	ft_sendnick(char *buf, t_cli *cli)
 {
 	char	**tab;
 	char	*tmp;
 
+	if (!cli->info.connected)
+	{
+		ft_putendl("need to connection to server");
+		return ;
+	}
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
-	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > NAME_SIZE))
+	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > NAME_SIZE) ||
+		(ft_strcmp(tab[1], "NONE") == 0 || ft_strcmp(tab[1], "ERROR") == 0))
 	{
 		ft_putstr("Nick need [nick-name]-");
 		ft_putnbr(NAME_SIZE);
-		ft_putendl("-maxsize");
+		ft_putendl("-maxsize or nick not valid");
 		free_tab(tab);
 		return ;
 	}
@@ -162,11 +169,16 @@ void	ft_nick(char *buf, t_cli *cli)
 	free_tab(tab);
 }
 
-void	ft_join(char *buf, t_cli *cli)
+void	ft_sendjoin(char *buf, t_cli *cli)
 {
 	char	**tab;
 	char	*tmp;
 
+	if (!cli->info.connected)
+	{
+		ft_putendl("need to connection to server");
+		return ;
+	}
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
@@ -182,18 +194,28 @@ void	ft_join(char *buf, t_cli *cli)
 	free_tab(tab);
 }
 
-void	ft_leave(char *buf, t_cli *cli)
+void	ft_sendleave(char *buf, t_cli *cli)
 {
+	if (!cli->info.connected)
+	{
+		ft_putendl("need to connection to server");
+		return ;
+	}
 	send_to_serv(buf, cli, LEAVE);
 }
 
-void	ft_msg(char *buf, t_cli *cli)
+void	ft_sendmsg(char *buf, t_cli *cli)
 {
+	if (!cli->info.connected)
+	{
+		ft_putendl("need to connection to server");
+		return ;
+	}
 	// pars buf
 	send_to_serv(buf, cli, MSG);
 }
 
-void	ft_gmsg(char *buf, t_cli *cli)
+void	ft_sendgmsg(char *buf, t_cli *cli)
 {
 	if (cli->info.connected)
 		send_to_serv(buf, cli, GMSG);
@@ -203,8 +225,8 @@ void	execut_command(char *cmd, t_cli *cli)
 {
 	int i;
 	static t_cmd tab[] = {
-		{"/connect", &ft_connect}, {"/nick", &ft_nick},
-		{"/join", &ft_join}, {"/leave", &ft_leave},
+		{"/connect", &ft_sendconnect}, {"/nick", &ft_sendnick},
+		{"/join", &ft_sendjoin}, {"/leave", &ft_sendleave},
 		{"NONE", NULL}
 	};
 
@@ -221,7 +243,7 @@ void	execut_command(char *cmd, t_cli *cli)
 	if (cmd[0] == '/')
 		ft_putendl("command not fund");
 	else
-		ft_gmsg(cmd, cli);
+		ft_sendgmsg(cmd, cli);
 }
 
 void	read_std_e(t_cli *cli)
@@ -239,24 +261,67 @@ void	read_std_e(t_cli *cli)
 	}
 }
 
+void	ft_getconnect(char *sms, t_cli *cli)
+{
+	(void)sms;
+	(void)cli;
+}
+
+void	ft_getnick(char *sms, t_cli *cli)
+{
+	(void)sms;
+	(void)cli;
+}
+
+void	ft_getjoin(char *sms, t_cli *cli)
+{
+	(void)sms;
+	(void)cli;
+}
+
+void	ft_getleave(char *sms, t_cli *cli)
+{
+	(void)sms;
+	(void)cli;
+}
+
+void	handle_command(t_cli *cli, t_sms *sms)
+{
+	int i;
+	static t_ccmd tab[] = {
+		{CONNECT, &ft_getconnect}, {NICK, &ft_getnick},
+		{JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
+		{NONE, NULL}
+	};
+
+	i = 0;
+	while (tab[i].type != NONE)
+	{
+		if (tab[i].type == sms->header.mytype)
+			tab[i].ccmds(sms->sms, cli);
+	}
+}
+
 void	resive_srv(t_cli *cli)
 {
 	int		r;
-	char	buf[BUF_SIZE +1];
+	size_t	offset;
+	t_sms	sms;
 
-	// need to put a while in order to get all message in one try ?
-	if ((r = recv(cli->fds[1], buf, BUF_SIZE, 0)) > 0)
+	offset = 0;
+	while ((r = recv(cli->fds[1], ((void *)&sms) + offset, BUF_SIZE, 0)) > 0)
 	{
-		buf[r] = '\0';
-		ft_putstr(buf);
+		offset += BUF_SIZE;
+		if (offset == sizeof(t_sms))
+		{
+			handle_command(cli, &sms);
+			return ;
+		}
 	}
-	else
-	{
-		close(cli->fds[1]);
-		// clean_fd(&e->fds[cs]);
-		ft_putendl("Server Error");
-		exit(2);
-	}
+	close(cli->fds[1]);
+	// clean_fd(&e->fds[cs]);
+	ft_putendl("Server Error");
+	exit(2);
 }
 
 void	check_fdc(t_cli *cli)

@@ -31,16 +31,15 @@ void	init_env(t_env *e)
 
 	if (getrlimit(RLIMIT_NOFILE, &rlp) == -1)
 		ft_putendl("error of getrlimit");
-
 	e->maxfd = rlp.rlim_cur;
 	if (!(e->fds = malloc(sizeof(*e->fds) * e->maxfd)))
 		ft_putendl("malloc error");
-
 	i = 0;
 	while (i < e->maxfd)
 	{
 		clean_fd(&e->fds[i]);
-		e->fds[i].sizeread = 0;
+		e->fds[i].client = 0;
+		// e->fds[i].sizeread = 0;
 		i++;
 	}
 }
@@ -84,29 +83,49 @@ void	init_fd(t_env *e)
 	}
 }
 
-void	ft_nick(char *sms, t_env *e)
+void	ft_getnick(char *sms, t_env *e, int cs)
+{
+	int i;
+
+	i = 0;
+	while (i < e->maxfd)
+	{
+		if (cs != i && e->fds[i].client == 1 &&
+			ft_strcmp(e->fds[i].name, "NONE") != 0 &&
+			ft_strcmp(e->fds[i].name, sms) == 0)
+		{
+			send_to_client("ERROR", cs, NICK);
+			return ;
+		}
+	}
+	send_to_client(sms, cs, NICK);
+}
+
+void	ft_getjoin(char *sms, t_env *e, int cs)
 {
 	(void)sms;
 	(void)e;
+	// if (ft_strcmp(e->fds[cs].name, "NONE") != 0 &&
+	// 	ft_strcmp(e->fds[cs].name, sms) == 0)
+	// {
+	// 	send_to_client("ERROR", cs, JOIN);
+	// 	return ;
+	// }
+	send_to_client(sms, cs, JOIN);
 }
 
-void	ft_join(char *sms, t_env *e)
+void	ft_getleave(char *sms, t_env *e, int cs)
 {
 	(void)sms;
 	(void)e;
+	(void)cs;
 }
 
-void	ft_leave(char *sms, t_env *e)
-{
-	(void)sms;
-	(void)e;
-}
-
-void	handle_command(t_env *e, t_sms *sms)
+void	handle_command(t_env *e, t_sms *sms, int cs)
 {
 	int i;
 	static t_smd tab[] = {
-		{NICK, &ft_nick}, {JOIN, &ft_join}, {LEAVE, &ft_leave},
+		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
 		{NONE, NULL}
 	};
 
@@ -114,11 +133,44 @@ void	handle_command(t_env *e, t_sms *sms)
 	while (tab[i].type != NONE)
 	{
 		if (tab[i].type == sms->header.mytype)
-			tab[i].cmds(sms->sms, e);
+			tab[i].cmds(sms->sms, e, cs);
 	}
 }
 
-void	client_read(t_env *e, int cs)
+void	send_packet(int cs, t_sms *sms)
+{
+	size_t	start;
+	unsigned char *send_addr;
+
+	start = 0;
+	while (start < sizeof(*sms))
+	{
+		printf("start: %lu - %lu\n", start, sizeof(*sms));
+		send_addr = ((unsigned char *)sms) + start;
+		send(cs, send_addr, BUF_SIZE, 0);
+		start += BUF_SIZE;
+	}
+}
+
+void	send_to_client(char* txt, int cs, enum types type)
+{
+	size_t	offset;
+	char	buff[SMS_SIZE + 1];
+	t_sms	sms;
+
+	sms.header.mytype = type;
+	offset = 0;
+	while (ft_strlen(txt) >= offset)
+	{
+		ft_strncpy(buff, txt + offset, SMS_SIZE);
+		buff[SMS_SIZE] = 0;
+		ft_memcpy(sms.sms, buff, SMS_SIZE + 1);
+		send_packet(cs, &sms);
+		offset += SMS_SIZE;
+	}
+}
+
+void	read_client(t_env *e, int cs)
 {
 	int		r;
 	size_t	offset;
@@ -132,13 +184,13 @@ void	client_read(t_env *e, int cs)
 		offset += BUF_SIZE;
 		if (offset == sizeof(t_sms))
 		{
-			// ft_putstr(sms.sms);
-			// send(cs, sms.sms, ft_strlen(sms.sms), 0);
+			handle_command(e, &sms, cs);
 			return ;
 		}
 	}
 	close(cs);
 	clean_fd(&e->fds[cs]);
+	e->fds[cs].client = 0;
 	printf("client #%d gone away\n", cs);
 }
 
@@ -151,16 +203,15 @@ void	srv_accept(t_env *e, int s)
 	csin_len = sizeof(csin);
 	if ((cs = accept(s, (struct sockaddr*)&csin, &csin_len)) == -1)
 		ft_putendl("accept error");
-
-	// printf("New client #%d from %s:%d\n", cs,
-	// inet_ntoa(csin.sin_addr), ntohs(csin.sin_port));
 	clean_fd(&e->fds[cs]);
 	e->fds[cs].type = FD_CLIENT;
-	e->fds[cs].fct_read = client_read;
+	e->fds[cs].fct_read = read_client;
 	ft_strncpy(e->fds[cs].name, "NONE", 4);
 	e->fds[cs].name[4] = '\0';
 	ft_strncpy(e->fds[cs].chan, "NONE", 4);
 	e->fds[cs].chan[4] = '\0';
+	e->fds[cs].client = 1;
+
 	ft_putstr("New client ");
 	ft_putendl(e->fds[cs].name);
 }
@@ -199,7 +250,8 @@ void	srv_create(t_env *e, int port)
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
 
 	int option_true = 1;
-	setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option_true, sizeof(option_true));
+	setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option_true,
+		sizeof(option_true));
 	if (bind(server_socket , (struct sockaddr*)&serv, sizeof(serv) ) == -1)
 		usage("socket fail");
 	if (listen(server_socket, 42) == -1)
