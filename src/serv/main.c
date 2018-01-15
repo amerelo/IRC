@@ -221,7 +221,7 @@ void	ft_getgmsg(char *sms, t_env *e, int cs)
 	// 	user[NAME_SIZE + 1];
 	// 	i++;
 	//
-	ft_putendl(sms);
+	printf("get --------- %s\n", sms);
 	while (sms[i])
 	{
 		if (e->fds[cs].msg.write == BUF_T)
@@ -230,6 +230,7 @@ void	ft_getgmsg(char *sms, t_env *e, int cs)
 		e->fds[cs].msg.write++;
 		i++;
 	}
+
 }
 
 void	handle_command(t_env *e, t_sms *sms, int cs)
@@ -238,7 +239,7 @@ void	handle_command(t_env *e, t_sms *sms, int cs)
 	static t_smd tab[] = {
 		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
 		{CREATE, &ft_getcreate}, {LIST, &ft_getlist},
-		{},
+		{MSG, &ft_getmsg}, {GMSG, &ft_getgmsg},
 		{NONE, NULL}
 	};
 
@@ -352,18 +353,22 @@ void	format_msg(t_env *e, char *sms, int cs)
 	{
 		if (e->fds[cs].msg.read == BUF_T)
 			e->fds[cs].msg.read = 0;
-		sms[i] = e->fds[cs].msg.read;
+		// printf("L|%c|\n", );
+		sms[i] = e->fds[cs].msg.buf_t[e->fds[cs].msg.read];
 		e->fds[cs].msg.read++;
 		i++;
 	}
+	printf("F|%s|\n", sms);
 	// sms[i] = '\0';
 }
 
 void send_msg(t_env *e, int i)
 {
 	int		client;
-	char	sms[SMS_SIZE + 1];
+	char	sms[SMS_SIZE];
 
+	printf("send_msg\n");
+	ft_bzero(sms, SMS_SIZE);
 	if ((client = get_client_by_name(e, e->fds[i].msg.user)) >= 0)
 	{
 		format_msg(e, sms, i);
@@ -380,7 +385,9 @@ void send_gmsg(t_env *e, int cs)
 	char	sms[SMS_SIZE + 1];
 
 	i = 0;
+	ft_bzero(sms, SMS_SIZE);
 	format_msg(e, sms, cs);
+	printf("format-----> %s\n", sms);
 	while (i < e->maxfd)
 	{
 		if (i != cs)
@@ -394,11 +401,16 @@ void 	send_msgs(t_env *e)
 	int		i;
 
 	i = 0;
+	printf("send\n");
 	while (i < e->maxfd)
 	{
-		if (e->fds[i].client == 1 && e->fds[i].msg.global == 1 &&
-			e->fds[i].msg.write != e->fds[i].msg.read)
+		// printf("%s\n", );
+		if (e->fds[i].client == 1 && e->fds[i].msg.global == 1)
+		{
+			// if (e->fds[i].msg.write != e->fds[i].msg.read)
+			printf("global %d - %d\n", e->fds[i].msg.write, e->fds[i].msg.read);
 			send_gmsg(e, i);
+		}
 		else if (e->fds[i].client == 0 && e->fds[i].msg.global == 0 &&
 			e->fds[i].msg.write != e->fds[i].msg.read)
 			send_msg(e, i);

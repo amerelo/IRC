@@ -360,14 +360,13 @@ void	ft_getlist(char *sms, t_cli *cli)
 void	ft_getgmsg(char *sms, t_cli *cli)
 {
 	(void)cli;
-	// ft_putstr("->Room: ");
+	printf("get --------- %s\n", sms);
 	ft_putendl(sms);
 }
 
 void	ft_getmsg(char *sms, t_cli *cli)
 {
 	(void)cli;
-	// ft_putstr("->Room: ");
 	ft_putendl(sms);
 }
 
