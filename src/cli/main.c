@@ -39,6 +39,7 @@ int		connect_client(char *addr, int port, t_cli *cli)
 		return (cli->fds[1]);
 	}
 	cli->info.connected = 1;
+	ft_putendl("success connection please select your nick name to continue");
 	return (sock);
 }
 
@@ -66,7 +67,7 @@ void	send_packet(t_cli *cli, t_sms *sms)
 	start = 0;
 	while (start < sizeof(*sms))
 	{
-		printf("start: %lu - %lu\n", start, sizeof(*sms));
+		// printf("start: %lu - %lu\n", start, sizeof(*sms));
 		send_addr = ((unsigned char *)sms) + start;
 		send(cli->fds[1], send_addr, BUF_SIZE, 0);
 		start += BUF_SIZE;
@@ -118,15 +119,29 @@ int		verif_narg(char **tab, int limit)
 	return ((i != limit) ? 1 : 0);
 }
 
+int		starter_check(t_cli *cli)
+{
+	if (!cli->info.connected)
+	{
+		ft_putendl("Need to connection to server");
+		return (1);
+	}
+	if (ft_strcmp(cli->info.name, "NONE") == 0)
+	{
+		ft_putendl("Select a nick name");
+		return (1);
+	}
+	return (0);
+}
+
 void	ft_sendconnect(char *buf, t_cli *cli)
 {
 	char **tab;
 	char *tmp;
 
-	ft_putendl(buf);
 	if (cli->info.connected)
 	{
-		ft_putendl("already connected");
+		ft_putendl("Already connected");
 		return ;
 	}
 	tmp = ft_strrchr(buf, '\n');
@@ -134,7 +149,7 @@ void	ft_sendconnect(char *buf, t_cli *cli)
 	tab = ft_strsplit(buf, ' ');
 	if (verif_narg(tab, 3))
 	{
-		ft_putendl("connect need [machine] [port]");
+		ft_putendl("Connect need [machine] [port]");
 		free_tab(tab);
 		return ;
 	}
@@ -150,7 +165,7 @@ void	ft_sendnick(char *buf, t_cli *cli)
 
 	if (!cli->info.connected)
 	{
-		ft_putendl("need to connection to server");
+		ft_putendl("Need to connection to server");
 		return ;
 	}
 	tmp = ft_strrchr(buf, '\n');
@@ -174,11 +189,8 @@ void	ft_sendjoin(char *buf, t_cli *cli)
 	char	**tab;
 	char	*tmp;
 
-	if (!cli->info.connected)
-	{
-		ft_putendl("need to connection to server");
+	if (starter_check(cli))
 		return ;
-	}
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
@@ -204,6 +216,35 @@ void	ft_sendleave(char *buf, t_cli *cli)
 	send_to_serv(buf, cli, LEAVE);
 }
 
+void	ft_sendcreate(char *buf, t_cli *cli)
+{
+	char	**tab;
+	char	*tmp;
+
+	if (starter_check(cli))
+		return ;
+	tmp = ft_strrchr(buf, '\n');
+	*tmp = '\0';
+	tab = ft_strsplit(buf, ' ');
+	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > ROOM_NAME_SIZE))
+	{
+		ft_putstr("CREATE need [room-name]-");
+		ft_putnbr(ROOM_NAME_SIZE);
+		ft_putendl("-maxsize");
+		free_tab(tab);
+		return ;
+	}
+	send_to_serv(tab[1], cli, CREATE);
+	free_tab(tab);
+}
+
+void	ft_sendlist(char *buf, t_cli *cli)
+{
+	if (starter_check(cli))
+		return ;
+	send_to_serv(buf, cli, LIST);
+}
+
 void	ft_sendmsg(char *buf, t_cli *cli)
 {
 	if (!cli->info.connected)
@@ -227,6 +268,7 @@ void	execut_command(char *cmd, t_cli *cli)
 	static t_cmd tab[] = {
 		{"/connect", &ft_sendconnect}, {"/nick", &ft_sendnick},
 		{"/join", &ft_sendjoin}, {"/leave", &ft_sendleave},
+		{"/create", &ft_sendcreate}, {"/list", &ft_sendlist},
 		{"NONE", NULL}
 	};
 
@@ -243,7 +285,10 @@ void	execut_command(char *cmd, t_cli *cli)
 	if (cmd[0] == '/')
 		ft_putendl("command not fund");
 	else
+	{
+		printf("send msg \n");
 		ft_sendgmsg(cmd, cli);
+	}
 }
 
 void	read_std_e(t_cli *cli)
@@ -254,44 +299,85 @@ void	read_std_e(t_cli *cli)
 	ft_bzero(buf, BUF_E_READ +1);
 	while ((r = read(1, buf, BUF_E_READ)) > 0)
 	{
-		execut_command(buf, cli);
 		if (ft_strchr(buf, '\n'))
+		{
+			execut_command(buf, cli);
 			return ;
+		}
+		execut_command(buf, cli);
 		ft_bzero(buf, BUF_E_READ +1);
 	}
 }
 
-void	ft_getconnect(char *sms, t_cli *cli)
-{
-	(void)sms;
-	(void)cli;
-}
-
 void	ft_getnick(char *sms, t_cli *cli)
 {
-	(void)sms;
-	(void)cli;
+	if (ft_strcmp(sms, "ERROR") == 0)
+	{
+		ft_putendl("Nick name not valid try again");
+		return ;
+	}
+	ft_strcpy(cli->info.name, sms);
+	ft_putendl("Valid nick name");
 }
 
 void	ft_getjoin(char *sms, t_cli *cli)
 {
-	(void)sms;
-	(void)cli;
+	if (ft_strcmp(sms, "ERROR") == 0)
+	{
+		ft_putendl("Chat Room not valid try again");
+		return ;
+	}
+	cli->info.chan = 1;
+	ft_putendl("Join room");
 }
 
 void	ft_getleave(char *sms, t_cli *cli)
 {
 	(void)sms;
+	cli->info.chan = 0;
+	ft_putendl("Leave room");
+}
+
+void	ft_getcreate(char *sms, t_cli *cli)
+{
 	(void)cli;
+	if (ft_strcmp(sms, "ERROR") == 0)
+	{
+		ft_putendl("Create fail try again");
+		return ;
+	}
+	ft_putstr("Create room ");
+	ft_putendl(sms);
+}
+
+void	ft_getlist(char *sms, t_cli *cli)
+{
+	(void)cli;
+	ft_putstr("->Room: ");
+	ft_putendl(sms);
+}
+
+void	ft_getgmsg(char *sms, t_cli *cli)
+{
+	(void)cli;
+	// ft_putstr("->Room: ");
+	ft_putendl(sms);
+}
+
+void	ft_getmsg(char *sms, t_cli *cli)
+{
+	(void)cli;
+	// ft_putstr("->Room: ");
+	ft_putendl(sms);
 }
 
 void	handle_command(t_cli *cli, t_sms *sms)
 {
 	int i;
 	static t_ccmd tab[] = {
-		{CONNECT, &ft_getconnect}, {NICK, &ft_getnick},
-		{JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
-		{NONE, NULL}
+		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
+		{CREATE, &ft_getcreate}, {LIST, &ft_getlist}, {GMSG, &ft_getgmsg},
+		{MSG, &ft_getmsg}, {NONE, NULL}
 	};
 
 	i = 0;
@@ -299,6 +385,7 @@ void	handle_command(t_cli *cli, t_sms *sms)
 	{
 		if (tab[i].type == sms->header.mytype)
 			tab[i].ccmds(sms->sms, cli);
+		i++;
 	}
 }
 
@@ -314,6 +401,7 @@ void	resive_srv(t_cli *cli)
 		offset += BUF_SIZE;
 		if (offset == sizeof(t_sms))
 		{
+			// printf("resive sms\n");
 			handle_command(cli, &sms);
 			return ;
 		}
@@ -326,13 +414,16 @@ void	resive_srv(t_cli *cli)
 
 void	check_fdc(t_cli *cli)
 {
-	if (FD_ISSET(cli->fds[0], &cli->fd_read))
-		read_std_e(cli);
-	if (cli->info.connected && FD_ISSET(cli->fds[1], &cli->fd_read))
-		resive_srv(cli);
-	if (FD_ISSET(cli->fds[0], &cli->fd_read) || (cli->info.connected &&
-	FD_ISSET(cli->fds[1], &cli->fd_read)))
-		cli->r--;
+	while (cli->r > 0)
+	{
+		if (FD_ISSET(cli->fds[0], &cli->fd_read))
+			read_std_e(cli);
+		if (cli->info.connected && FD_ISSET(cli->fds[1], &cli->fd_read))
+			resive_srv(cli);
+		if (FD_ISSET(cli->fds[0], &cli->fd_read) || (cli->info.connected &&
+		FD_ISSET(cli->fds[1], &cli->fd_read)))
+			cli->r--;
+	}
 }
 
 void	cli_loop(t_cli *cli)
@@ -350,17 +441,20 @@ void	init_client(t_cli *cli)
 	cli->fds[0] = 1;
 	cli->fds[1] = 0;
 	cli->info.connected = 0;
-	ft_strncpy(cli->info.chan, "NONE", 4);
-	cli->info.chan[4] = '\0';
+	cli->info.chan = 0;
 	ft_strncpy(cli->info.name, "NONE", 4);
 	cli->info.name[4] = '\0';
 }
 
-int		main(void)
+int		main(int ac, char ** av)
 {
 	t_cli	cli;
 
+	// if (ac != 1 && ac != 3)
+	// 	usage("need 3 args");
 	init_client(&cli);
+	if (ac == 3)
+		cli.fds[1] = connect_client(av[1], ft_atoi(av[2]), &cli);
 	cli_loop(&cli);
 	return(0);
 }

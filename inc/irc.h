@@ -19,7 +19,7 @@
 # include <netinet/in.h>
 # include <netdb.h>
 
-#include <stdio.h> //<< rm
+# include <stdio.h> //<< rm
 
 # define FD_FREE			0
 # define FD_SERV			1
@@ -29,6 +29,7 @@
 # define ROOM_NAME_SIZE		12
 
 # define BUF_E_READ			1024
+# define BUF_T				1024
 # define BUF_SUB			2
 # define SMS_PACKET_SIZE	512
 
@@ -53,6 +54,8 @@ enum types
 	NICK,
 	JOIN,
 	LEAVE,
+	CREATE,
+	LIST,
 	WHO,
 	MSG,
 	GMSG
@@ -73,21 +76,30 @@ typedef struct		s_sms
 
 # define BUF_SIZE	(sizeof(t_sms) / BUF_SUB)
 
+typedef struct		s_msg
+{
+	int				global;
+	int				read;
+	int				write;
+	char			user[NAME_SIZE + 1];
+	char			buf_t[1024];
+}					t_msg;
+
 typedef struct		s_fd
 {
 	int				type;
-	// char			*struct_sms;
 	int				client;
 	void			(*fct_read)();
 	char			buf_read[BUF_SIZE + 1];
 	char			name[NAME_SIZE + 1];
-	char			chan[ROOM_NAME_SIZE + 1];
+	t_msg			msg;
+	struct	s_chan	*chan;
 }					t_fd;
 
 typedef struct		s_info
 {
 	int				connected;
-	char			chan[ROOM_NAME_SIZE + 1];
+	int				chan;
 	char			name[NAME_SIZE + 1];
 }					t_info;
 
@@ -104,14 +116,23 @@ typedef struct		s_cli
 	t_info			info;
 }					t_cli;
 
+typedef struct		s_chan
+{
+	int				connected;
+	char			name[ROOM_NAME_SIZE + 1];
+	struct	s_chan	*next;
+}					t_chan;
+
 typedef struct		s_env
 {
 	t_fd			*fds;
+	t_chan			*chan;
 	int				port;
 	int				maxfd;
 	int				max;
 	int				r;
 	fd_set			fd_read;
+
 }					t_env;
 
 typedef struct		s_cmd

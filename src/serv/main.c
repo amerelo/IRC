@@ -24,23 +24,54 @@ void	clean_fd(t_fd *fd)
 	fd->fct_read = NULL;
 }
 
+// ft_free_list_chan
+
 void	init_env(t_env *e)
 {
 	int				i;
 	struct rlimit	rlp;
 
+	i = 0;
 	if (getrlimit(RLIMIT_NOFILE, &rlp) == -1)
 		ft_putendl("error of getrlimit");
 	e->maxfd = rlp.rlim_cur;
+	e->chan = NULL;
 	if (!(e->fds = malloc(sizeof(*e->fds) * e->maxfd)))
 		ft_putendl("malloc error");
-	i = 0;
 	while (i < e->maxfd)
 	{
 		clean_fd(&e->fds[i]);
 		e->fds[i].client = 0;
-		// e->fds[i].sizeread = 0;
+		e->fds[i].msg.global = 1;
+		e->fds[i].msg.read = 0;
+		e->fds[i].msg.write = 0;
+		ft_strcpy(e->fds[i].msg.user, "NONE");
 		i++;
+	}
+}
+
+void	init_list_chan(t_chan **head, char *name)
+{
+	t_chan *inf;
+
+	inf = *head;
+	while (inf && inf->next)
+		inf = inf->next;
+	if (!(*head))
+	{
+		inf = (t_chan *)malloc(sizeof(t_chan));
+		*head = inf;
+		ft_strcpy(inf->name, name);
+		inf->connected = 0;
+		inf->next = NULL;
+	}
+	else
+	{
+		inf->next = (t_chan *)malloc(sizeof(t_chan));
+		inf = inf->next;
+		ft_strcpy(inf->name, name);
+		inf->connected = 0;
+		inf->next = NULL;
 	}
 }
 
@@ -88,37 +119,117 @@ void	ft_getnick(char *sms, t_env *e, int cs)
 	int i;
 
 	i = 0;
+	// printf("Get nick -> %s\n", sms);
 	while (i < e->maxfd)
 	{
+		// if (e->fds[i].client == 1)
+		// 	printf("name %s\n", e->fds[i].name);
 		if (cs != i && e->fds[i].client == 1 &&
 			ft_strcmp(e->fds[i].name, "NONE") != 0 &&
 			ft_strcmp(e->fds[i].name, sms) == 0)
 		{
+			// printf("error name \n");
 			send_to_client("ERROR", cs, NICK);
 			return ;
 		}
+		i++;
 	}
+	ft_strcpy(e->fds[cs].name, sms);
 	send_to_client(sms, cs, NICK);
 }
 
 void	ft_getjoin(char *sms, t_env *e, int cs)
 {
-	(void)sms;
-	(void)e;
-	// if (ft_strcmp(e->fds[cs].name, "NONE") != 0 &&
-	// 	ft_strcmp(e->fds[cs].name, sms) == 0)
-	// {
-	// 	send_to_client("ERROR", cs, JOIN);
-	// 	return ;
-	// }
-	send_to_client(sms, cs, JOIN);
+	t_chan *tmp;
+
+	tmp = e->chan;
+	while (tmp)
+	{
+		if (ft_strcmp(tmp->name, sms) == 0)
+		{
+			e->fds[cs].chan = tmp;
+			send_to_client(sms, cs, JOIN);
+			return ;
+		}
+		tmp = tmp->next;
+	}
+	send_to_client("ERROR", cs, JOIN);
 }
 
 void	ft_getleave(char *sms, t_env *e, int cs)
 {
+	e->fds[cs].chan = NULL;
+	send_to_client(sms, cs, LEAVE);
+}
+
+void	ft_getcreate(char *sms, t_env *e, int cs)
+{
+	t_chan *tmp;
+
+	tmp = e->chan;
+	while (tmp)
+	{
+		// printf("name %s\n", tmp->name);
+		if (ft_strcmp(tmp->name, sms) == 0)
+		{
+			send_to_client("ERROR", cs, CREATE);
+			return ;
+		}
+		tmp = tmp->next;
+	}
+	init_list_chan(&e->chan, sms);
+	send_to_client(sms, cs, CREATE);
+}
+
+void	ft_getlist(char *sms, t_env *e, int cs)
+{
+	t_chan *tmp;
+
 	(void)sms;
-	(void)e;
-	(void)cs;
+	tmp = e->chan;
+	while (tmp)
+	{
+		send_to_client(tmp->name, cs, LIST);
+		tmp = tmp->next;
+	}
+}
+
+void	ft_getmsg(char *sms, t_env *e, int cs)
+{
+	int i;
+
+	i = 0;
+	while (sms[i])
+	{
+		if (e->fds[cs].msg.write == BUF_T)
+			e->fds[cs].msg.write = 0;
+		e->fds[cs].msg.buf_t[e->fds[cs].msg.write] = sms[i];
+		e->fds[cs].msg.write++;
+		i++;
+	}
+}
+
+void	ft_getgmsg(char *sms, t_env *e, int cs)
+{
+	int i;
+
+	i = 0;
+	e->fds[cs].msg.global = 1;
+	// check user
+	// while (sms[i] == ' ')
+	// {
+	// 	user[NAME_SIZE + 1];
+	// 	i++;
+	//
+	ft_putendl(sms);
+	while (sms[i])
+	{
+		if (e->fds[cs].msg.write == BUF_T)
+			e->fds[cs].msg.write = 0;
+		e->fds[cs].msg.buf_t[e->fds[cs].msg.write] = sms[i];
+		e->fds[cs].msg.write++;
+		i++;
+	}
 }
 
 void	handle_command(t_env *e, t_sms *sms, int cs)
@@ -126,6 +237,8 @@ void	handle_command(t_env *e, t_sms *sms, int cs)
 	int i;
 	static t_smd tab[] = {
 		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
+		{CREATE, &ft_getcreate}, {LIST, &ft_getlist},
+		{},
 		{NONE, NULL}
 	};
 
@@ -134,6 +247,7 @@ void	handle_command(t_env *e, t_sms *sms, int cs)
 	{
 		if (tab[i].type == sms->header.mytype)
 			tab[i].cmds(sms->sms, e, cs);
+		i++;
 	}
 }
 
@@ -145,7 +259,7 @@ void	send_packet(int cs, t_sms *sms)
 	start = 0;
 	while (start < sizeof(*sms))
 	{
-		printf("start: %lu - %lu\n", start, sizeof(*sms));
+		// printf("start: %lu - %lu\n", start, sizeof(*sms));
 		send_addr = ((unsigned char *)sms) + start;
 		send(cs, send_addr, BUF_SIZE, 0);
 		start += BUF_SIZE;
@@ -208,17 +322,93 @@ void	srv_accept(t_env *e, int s)
 	e->fds[cs].fct_read = read_client;
 	ft_strncpy(e->fds[cs].name, "NONE", 4);
 	e->fds[cs].name[4] = '\0';
-	ft_strncpy(e->fds[cs].chan, "NONE", 4);
-	e->fds[cs].chan[4] = '\0';
+	e->fds[cs].chan = NULL;
 	e->fds[cs].client = 1;
 
 	ft_putstr("New client ");
 	ft_putendl(e->fds[cs].name);
 }
 
+int		get_client_by_name(t_env *e, char *name)
+{
+	int i;
+
+	i = 0;
+	while (i < e->maxfd)
+	{
+		if (ft_strcmp(e->fds[i].name, name) == 0)
+			return (i);
+		i++;
+	}
+	return (-1);
+}
+
+void	format_msg(t_env *e, char *sms, int cs)
+{
+	int i;
+
+	i = 0;
+	while (e->fds[cs].msg.write != e->fds[cs].msg.read)
+	{
+		if (e->fds[cs].msg.read == BUF_T)
+			e->fds[cs].msg.read = 0;
+		sms[i] = e->fds[cs].msg.read;
+		e->fds[cs].msg.read++;
+		i++;
+	}
+	// sms[i] = '\0';
+}
+
+void send_msg(t_env *e, int i)
+{
+	int		client;
+	char	sms[SMS_SIZE + 1];
+
+	if ((client = get_client_by_name(e, e->fds[i].msg.user)) >= 0)
+	{
+		format_msg(e, sms, i);
+		send_to_client(sms, client, MSG);
+	}
+	else
+		send_to_client("ERROR", i, MSG);
+	e->fds[i].msg.read++;
+}
+
+void send_gmsg(t_env *e, int cs)
+{
+	int		i;
+	char	sms[SMS_SIZE + 1];
+
+	i = 0;
+	format_msg(e, sms, cs);
+	while (i < e->maxfd)
+	{
+		if (i != cs)
+			send_to_client(sms, i, GMSG);
+		i++;
+	}
+}
+
+void 	send_msgs(t_env *e)
+{
+	int		i;
+
+	i = 0;
+	while (i < e->maxfd)
+	{
+		if (e->fds[i].client == 1 && e->fds[i].msg.global == 1 &&
+			e->fds[i].msg.write != e->fds[i].msg.read)
+			send_gmsg(e, i);
+		else if (e->fds[i].client == 0 && e->fds[i].msg.global == 0 &&
+			e->fds[i].msg.write != e->fds[i].msg.read)
+			send_msg(e, i);
+		i++;
+	}
+}
+
 void	check_fd(t_env *e)
 {
-	int	i;
+	int		i;
 
 	i = 0;
 	while ((i < e->maxfd) && (e->r > 0))
@@ -228,12 +418,11 @@ void	check_fd(t_env *e)
 			// ft_putendl("\ncall of read");
 			e->fds[i].fct_read(e, i);
 		}
-		// if (FD_ISSET(i, &e->fd_write))
-		// 	e->fds[i].fct_write(e, i);
-		if (FD_ISSET(i, &e->fd_read)) // || FD_ISSET(i, &e->fd_write)
+		if (FD_ISSET(i, &e->fd_read))
 			e->r--;
 		i++;
 	}
+	send_msgs(e);
 }
 
 void	srv_create(t_env *e, int port)

@@ -23,7 +23,8 @@ SRC_CC := $(addprefix $(DIR_C), $(FILE_CC))
 SRC_SO := $(addprefix $(DIR_OS), $(FILE_SO))
 SRC_CO := $(addprefix $(DIR_OC), $(FILE_CO))
 
-FLAGS = -Wall -Wextra -Werror -fsanitize=address -g
+FLAGS = -Wall -Wextra -Werror
+# -fsanitize=address -g
 
 LIBFT = ./libft/libft.a
 
@@ -37,10 +38,12 @@ $(DIR_OC):
 	mkdir -p $@
 
 obj/serv/%.o: src/serv/%.c
-	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H) -ggdb
+	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H)
+	# -ggdb
 
 obj/cli/%.o: src/cli/%.c
-	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H) -ggdb
+	gcc $(FLAGS) -o $@ -c $< -I $(DIR_H)
+	# -ggdb
 
 $(NAME_S): $(OBJ) $(DIR_OS) $(DIR_OC) $(SRC_SO) $(SRC_CO) $(LIBFT)
 		gcc -o $(NAME_S) $(SRC_SO) $(FLAGS) -L libft/ -lft
