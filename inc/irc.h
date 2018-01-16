@@ -55,6 +55,7 @@ enum types
 	JOIN,
 	LEAVE,
 	CREATE,
+	DELET,
 	LIST,
 	WHO,
 	MSG,
@@ -64,6 +65,7 @@ enum types
 typedef struct		s_sms_header
 {
 	enum types		mytype;
+	char			user[NAME_SIZE + 1];
 }					t_sms_header;
 
 # define SMS_SIZE	SMS_PACKET_SIZE - sizeof(t_sms_header)
@@ -132,7 +134,6 @@ typedef struct		s_env
 	int				max;
 	int				r;
 	fd_set			fd_read;
-
 }					t_env;
 
 typedef struct		s_cmd
@@ -144,7 +145,7 @@ typedef struct		s_cmd
 typedef struct		s_ccmd
 {
 	enum types 		type;
-	void			(*ccmds)(char*, t_cli *);
+	void			(*ccmds)(t_sms *, t_cli *);
 } 					t_ccmd;
 
 typedef struct		s_smd
@@ -153,9 +154,11 @@ typedef struct		s_smd
 	void			(*cmds)(char*, t_env *, int);
 } 					t_smd;
 
-void				send_to_client(char* txt, int cs, enum types type);
+void				send_to_client(char* txt, int cs, enum types type, char *name);
+void				system_gmsg(t_env *e, int cs, char *sms);
 void				srv_create(t_env *e, int port);
 
+int					get_client_by_name(t_env *e, char *name);
 void				check_fd(t_env *e);
 void				init_fd(t_env *e);
 // void	clean_fd(t_fd *fd);

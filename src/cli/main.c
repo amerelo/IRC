@@ -12,13 +12,6 @@
 
 #include "irc.h"
 
-void	usage(char *str)
-{
-	ft_putstr(str);
-	ft_putendl(" client");
-	exit(2);
-}
-
 int		connect_client(char *addr, int port, t_cli *cli)
 {
 	int					sock;
@@ -116,7 +109,7 @@ int		verif_narg(char **tab, int limit)
 			return (1);
 		i++;
 	}
-	return ((i != limit) ? 1 : 0);
+	return (i - limit);
 }
 
 int		starter_check(t_cli *cli)
@@ -147,7 +140,7 @@ void	ft_sendconnect(char *buf, t_cli *cli)
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
-	if (verif_narg(tab, 3))
+	if (verif_narg(tab, 3) != 0)
 	{
 		ft_putendl("Connect need [machine] [port]");
 		free_tab(tab);
@@ -171,7 +164,7 @@ void	ft_sendnick(char *buf, t_cli *cli)
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
-	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > NAME_SIZE) ||
+	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > NAME_SIZE) ||
 		(ft_strcmp(tab[1], "NONE") == 0 || ft_strcmp(tab[1], "ERROR") == 0))
 	{
 		ft_putstr("Nick need [nick-name]-");
@@ -194,7 +187,7 @@ void	ft_sendjoin(char *buf, t_cli *cli)
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
-	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > NAME_SIZE))
+	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > NAME_SIZE))
 	{
 		ft_putstr("Join need [room-name]-");
 		ft_putnbr(ROOM_NAME_SIZE);
@@ -226,7 +219,7 @@ void	ft_sendcreate(char *buf, t_cli *cli)
 	tmp = ft_strrchr(buf, '\n');
 	*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
-	if (verif_narg(tab, 2) || (ft_strlen(tab[1]) > ROOM_NAME_SIZE))
+	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > ROOM_NAME_SIZE))
 	{
 		ft_putstr("CREATE need [room-name]-");
 		ft_putnbr(ROOM_NAME_SIZE);
@@ -238,6 +231,28 @@ void	ft_sendcreate(char *buf, t_cli *cli)
 	free_tab(tab);
 }
 
+void	ft_senddelet(char *buf, t_cli *cli)
+{
+	char	**tab;
+	char	*tmp;
+
+	if (starter_check(cli))
+		return ;
+	tmp = ft_strrchr(buf, '\n');
+	*tmp = '\0';
+	tab = ft_strsplit(buf, ' ');
+	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > ROOM_NAME_SIZE))
+	{
+		ft_putstr("DELET need [room-name]-");
+		ft_putnbr(ROOM_NAME_SIZE);
+		ft_putendl("-maxsize");
+		free_tab(tab);
+		return ;
+	}
+	send_to_serv(tab[1], cli, DELET);
+	free_tab(tab);
+}
+
 void	ft_sendlist(char *buf, t_cli *cli)
 {
 	if (starter_check(cli))
@@ -245,20 +260,36 @@ void	ft_sendlist(char *buf, t_cli *cli)
 	send_to_serv(buf, cli, LIST);
 }
 
+void	ft_sendwho(char *buf, t_cli *cli)
+{
+	if (starter_check(cli) || cli->info.connected == 0)
+		return ;
+	send_to_serv(buf, cli, WHO);
+}
+
 void	ft_sendmsg(char *buf, t_cli *cli)
 {
-	if (!cli->info.connected)
+	char	**tab;
+
+	if (ft_strlen(buf) <= 1)
+		return ;
+	tab = ft_strsplit(buf, ' ');
+	if (verif_narg(tab, 3) > 0 || (ft_strlen(tab[1]) > NAME_SIZE) ||
+		ft_strcmp(tab[1], "NONE"))
 	{
-		ft_putendl("need to connection to server");
+		ft_putstr("MSG need [user-name]-");
+		ft_putnbr(ROOM_NAME_SIZE);
+		ft_putendl("-maxsize [msg]");
+		free_tab(tab);
 		return ;
 	}
-	// pars buf
 	send_to_serv(buf, cli, MSG);
+	free_tab(tab);
 }
 
 void	ft_sendgmsg(char *buf, t_cli *cli)
 {
-	if (cli->info.connected)
+	if (cli->info.connected && ft_strlen(buf) > 1)
 		send_to_serv(buf, cli, GMSG);
 }
 
@@ -268,8 +299,9 @@ void	execut_command(char *cmd, t_cli *cli)
 	static t_cmd tab[] = {
 		{"/connect", &ft_sendconnect}, {"/nick", &ft_sendnick},
 		{"/join", &ft_sendjoin}, {"/leave", &ft_sendleave},
-		{"/create", &ft_sendcreate}, {"/list", &ft_sendlist},
-		{"NONE", NULL}
+		{"/create", &ft_sendcreate},  {"/list", &ft_sendlist},
+		{"/who", &ft_sendwho}, {"/msg", &ft_sendmsg},
+		{"/delet", &ft_senddelet}, {"NONE", NULL}
 	};
 
 	i = 0;
@@ -285,10 +317,7 @@ void	execut_command(char *cmd, t_cli *cli)
 	if (cmd[0] == '/')
 		ft_putendl("command not fund");
 	else
-	{
-		printf("send msg \n");
 		ft_sendgmsg(cmd, cli);
-	}
 }
 
 void	read_std_e(t_cli *cli)
@@ -309,20 +338,20 @@ void	read_std_e(t_cli *cli)
 	}
 }
 
-void	ft_getnick(char *sms, t_cli *cli)
+void	ft_getnick(t_sms *sms, t_cli *cli)
 {
-	if (ft_strcmp(sms, "ERROR") == 0)
+	if (ft_strcmp(sms->sms, "ERROR") == 0)
 	{
 		ft_putendl("Nick name not valid try again");
 		return ;
 	}
-	ft_strcpy(cli->info.name, sms);
+	ft_strcpy(cli->info.name, sms->sms);
 	ft_putendl("Valid nick name");
 }
 
-void	ft_getjoin(char *sms, t_cli *cli)
+void	ft_getjoin(t_sms *sms, t_cli *cli)
 {
-	if (ft_strcmp(sms, "ERROR") == 0)
+	if (ft_strcmp(sms->sms, "ERROR") == 0)
 	{
 		ft_putendl("Chat Room not valid try again");
 		return ;
@@ -331,43 +360,97 @@ void	ft_getjoin(char *sms, t_cli *cli)
 	ft_putendl("Join room");
 }
 
-void	ft_getleave(char *sms, t_cli *cli)
+void	ft_getleave(t_sms *sms, t_cli *cli)
 {
 	(void)sms;
 	cli->info.chan = 0;
 	ft_putendl("Leave room");
 }
 
-void	ft_getcreate(char *sms, t_cli *cli)
+void	ft_getcreate(t_sms *sms, t_cli *cli)
 {
 	(void)cli;
-	if (ft_strcmp(sms, "ERROR") == 0)
+	if (ft_strcmp(sms->sms, "ERROR") == 0)
 	{
 		ft_putendl("Create fail try again");
 		return ;
 	}
 	ft_putstr("Create room ");
-	ft_putendl(sms);
+	ft_putendl(sms->sms);
 }
 
-void	ft_getlist(char *sms, t_cli *cli)
+void	ft_getdelet(t_sms *sms, t_cli *cli)
+{
+	(void)cli;
+	if (ft_strcmp(sms->sms, "ERROR") == 0)
+	{
+		ft_putendl("DELET fail try again");
+		return ;
+	}
+	ft_putstr("DELET room ");
+	ft_putendl(sms->sms);
+}
+
+void	ft_getlist(t_sms *sms, t_cli *cli)
 {
 	(void)cli;
 	ft_putstr("->Room: ");
-	ft_putendl(sms);
+	ft_putendl(sms->sms);
 }
 
-void	ft_getgmsg(char *sms, t_cli *cli)
+void	ft_getwho(t_sms *sms, t_cli *cli)
 {
 	(void)cli;
-	printf("get --------- %s\n", sms);
-	ft_putendl(sms);
+	ft_putstr("->User: ");
+	ft_putendl(sms->sms);
 }
 
-void	ft_getmsg(char *sms, t_cli *cli)
+void	ft_getgmsg(t_sms *sms, t_cli *cli)
 {
+	static int	flag = -1;
+
 	(void)cli;
-	ft_putendl(sms);
+	if (sms->sms[0] == '\0')
+		return ;
+
+	if (flag == -1 && ft_strrchr(sms->sms, '\n') != NULL)
+		flag = 1;
+	else if (flag == -1)
+		flag = 0;
+	if (flag == 1)
+	{
+		ft_putstr(sms->header.user);
+		ft_putstr(": ");
+	}
+	if (ft_strrchr(sms->sms, '\n') != NULL)
+		flag = 1;
+	else
+		flag = 0;
+	ft_putstr(sms->sms);
+}
+
+void	ft_getmsg(t_sms *sms, t_cli *cli)
+{
+	static int	flag = -1;
+
+	(void)cli;
+	if (sms->sms[0] == '\0')
+		return ;
+	if (flag == -1 && ft_strrchr(sms->sms, '\n') != NULL)
+		flag = 1;
+	else if (flag == -1)
+		flag = 0;
+	if (flag == 1)
+	{
+		ft_putstr("(PRIVATE)");
+		ft_putstr(sms->header.user);
+		ft_putstr(": ");
+	}
+	if (ft_strrchr(sms->sms, '\n') != NULL)
+		flag = 1;
+	else
+		flag = 0;
+	ft_putstr(sms->sms);
 }
 
 void	handle_command(t_cli *cli, t_sms *sms)
@@ -376,14 +459,18 @@ void	handle_command(t_cli *cli, t_sms *sms)
 	static t_ccmd tab[] = {
 		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
 		{CREATE, &ft_getcreate}, {LIST, &ft_getlist}, {GMSG, &ft_getgmsg},
-		{MSG, &ft_getmsg}, {NONE, NULL}
+		{DELET, &ft_getdelet}, {MSG, &ft_getmsg}, {WHO, &ft_getwho},
+		{NONE, NULL}
 	};
 
 	i = 0;
 	while (tab[i].type != NONE)
 	{
 		if (tab[i].type == sms->header.mytype)
-			tab[i].ccmds(sms->sms, cli);
+		{
+			tab[i].ccmds(sms, cli);
+			return ;
+		}
 		i++;
 	}
 }
@@ -395,18 +482,17 @@ void	resive_srv(t_cli *cli)
 	t_sms	sms;
 
 	offset = 0;
+	ft_bzero(sms.sms, NAME_SIZE + 1);
 	while ((r = recv(cli->fds[1], ((void *)&sms) + offset, BUF_SIZE, 0)) > 0)
 	{
 		offset += BUF_SIZE;
 		if (offset == sizeof(t_sms))
 		{
-			// printf("resive sms\n");
 			handle_command(cli, &sms);
 			return ;
 		}
 	}
 	close(cli->fds[1]);
-	// clean_fd(&e->fds[cs]);
 	ft_putendl("Server Error");
 	exit(2);
 }
@@ -449,32 +535,9 @@ int		main(int ac, char ** av)
 {
 	t_cli	cli;
 
-	// if (ac != 1 && ac != 3)
-	// 	usage("need 3 args");
 	init_client(&cli);
 	if (ac == 3)
 		cli.fds[1] = connect_client(av[1], ft_atoi(av[2]), &cli);
 	cli_loop(&cli);
 	return(0);
 }
-
-// void	srv_accept(t_env *e, int s)
-// {
-// 	int					cs;
-// 	struct sockaddr_in	csin;
-// 	socklen_t			csin_len;
-//
-// 	csin_len = sizeof(csin);
-// 	if ((cs = accept(s, (struct sockaddr*)&csin, &csin_len)) == -1)
-// 		ft_putendl("accept error");
-//
-// 	ft_putstr("New client ");
-// 	ft_putnbr(cs);
-// 	ft_putstr("\n");
-//
-// 	// printf("New client #%d from %s:%d\n", cs,
-// 	// inet_ntoa(csin.sin_addr), ntohs(csin.sin_port));
-// 	clean_fd(&e->fds[cs]);
-// 	e->fds[cs].type = FD_CLIENT;
-// 	e->fds[cs].fct_read = client_read;
-// }
