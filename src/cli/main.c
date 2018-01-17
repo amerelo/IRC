@@ -22,7 +22,6 @@ int		connect_client(char *addr, int port, t_cli *cli)
 	if (proto == 0)
 		return (-1);
 	sock = socket(PF_INET, SOCK_STREAM, proto->p_proto);
-
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(port);
 	sin.sin_addr.s_addr = inet_addr(addr);
@@ -36,11 +35,19 @@ int		connect_client(char *addr, int port, t_cli *cli)
 	return (sock);
 }
 
+void	clean_fd(t_cli *cli)
+{
+	cli->type2 = FD_FREE;
+	cli->info.connected = 0;
+	cli->info.chan = 0;
+	ft_bzero(cli->info.name, NAME_SIZE + 1);
+	ft_strcpy(cli->info.name, "NONE");
+}
+
 void	init_fdc(t_cli *cli)
 {
 	cli->max = 0;
 	FD_ZERO(&cli->fd_read);
-
 	ft_bzero(cli->buf, BUF_SIZE + 1);
 	FD_SET(cli->fds[0], &cli->fd_read);
 	if (cli->info.connected)
@@ -54,20 +61,19 @@ void	init_fdc(t_cli *cli)
 
 void	send_packet(t_cli *cli, t_sms *sms)
 {
-	size_t	start;
-	unsigned char *send_addr;
+	size_t			start;
+	unsigned char	*send_addr;
 
 	start = 0;
 	while (start < sizeof(*sms))
 	{
-		// printf("start: %lu - %lu\n", start, sizeof(*sms));
 		send_addr = ((unsigned char *)sms) + start;
 		send(cli->fds[1], send_addr, BUF_SIZE, 0);
 		start += BUF_SIZE;
 	}
 }
 
-void	send_to_serv(char* txt, t_cli *cli, enum types type)
+void	send_to_serv(char *txt, t_cli *cli, enum types type)
 {
 	size_t	offset;
 	char	buff[SMS_SIZE + 1];
@@ -134,11 +140,11 @@ void	ft_sendconnect(char *buf, t_cli *cli)
 
 	if (cli->info.connected)
 	{
-		ft_putendl("Already connected");
-		return ;
+		close(cli->fds[1]);
+		clean_fd(cli);
 	}
-	tmp = ft_strrchr(buf, '\n');
-	*tmp = '\0';
+	if ((tmp = ft_strrchr(buf, '\n')) != NULL)
+		*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
 	if (verif_narg(tab, 3) != 0)
 	{
@@ -161,8 +167,8 @@ void	ft_sendnick(char *buf, t_cli *cli)
 		ft_putendl("Need to connection to server");
 		return ;
 	}
-	tmp = ft_strrchr(buf, '\n');
-	*tmp = '\0';
+	if ((tmp = ft_strrchr(buf, '\n')) != NULL)
+		*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
 	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > NAME_SIZE) ||
 		(ft_strcmp(tab[1], "NONE") == 0 || ft_strcmp(tab[1], "ERROR") == 0))
@@ -184,8 +190,8 @@ void	ft_sendjoin(char *buf, t_cli *cli)
 
 	if (starter_check(cli))
 		return ;
-	tmp = ft_strrchr(buf, '\n');
-	*tmp = '\0';
+	if ((tmp = ft_strrchr(buf, '\n')) != NULL)
+		*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
 	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > NAME_SIZE))
 	{
@@ -216,8 +222,8 @@ void	ft_sendcreate(char *buf, t_cli *cli)
 
 	if (starter_check(cli))
 		return ;
-	tmp = ft_strrchr(buf, '\n');
-	*tmp = '\0';
+	if ((tmp = ft_strrchr(buf, '\n')) != NULL)
+		*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
 	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > ROOM_NAME_SIZE))
 	{
@@ -238,8 +244,8 @@ void	ft_senddelet(char *buf, t_cli *cli)
 
 	if (starter_check(cli))
 		return ;
-	tmp = ft_strrchr(buf, '\n');
-	*tmp = '\0';
+	if ((tmp = ft_strrchr(buf, '\n')) != NULL)
+		*tmp = '\0';
 	tab = ft_strsplit(buf, ' ');
 	if (verif_narg(tab, 2) != 0 || (ft_strlen(tab[1]) > ROOM_NAME_SIZE))
 	{
@@ -274,8 +280,8 @@ void	ft_sendmsg(char *buf, t_cli *cli)
 	if (ft_strlen(buf) <= 1)
 		return ;
 	tab = ft_strsplit(buf, ' ');
-	if (verif_narg(tab, 3) > 0 || (ft_strlen(tab[1]) > NAME_SIZE) ||
-		ft_strcmp(tab[1], "NONE"))
+	if (verif_narg(tab, 3) < 0 || (ft_strlen(tab[1]) > NAME_SIZE) ||
+		ft_strcmp(tab[1], "NONE") == 0)
 	{
 		ft_putstr("MSG need [user-name]-");
 		ft_putnbr(ROOM_NAME_SIZE);
@@ -295,11 +301,11 @@ void	ft_sendgmsg(char *buf, t_cli *cli)
 
 void	execut_command(char *cmd, t_cli *cli)
 {
-	int i;
-	static t_cmd tab[] = {
+	int				i;
+	static t_cmd	tab[] = {
 		{"/connect", &ft_sendconnect}, {"/nick", &ft_sendnick},
 		{"/join", &ft_sendjoin}, {"/leave", &ft_sendleave},
-		{"/create", &ft_sendcreate},  {"/list", &ft_sendlist},
+		{"/create", &ft_sendcreate}, {"/list", &ft_sendlist},
 		{"/who", &ft_sendwho}, {"/msg", &ft_sendmsg},
 		{"/delet", &ft_senddelet}, {"NONE", NULL}
 	};
@@ -323,9 +329,9 @@ void	execut_command(char *cmd, t_cli *cli)
 void	read_std_e(t_cli *cli)
 {
 	int			r;
-	static char	buf[BUF_E_READ +1];
+	static char	buf[BUF_E_READ + 1];
 
-	ft_bzero(buf, BUF_E_READ +1);
+	ft_bzero(buf, BUF_E_READ + 1);
 	while ((r = read(1, buf, BUF_E_READ)) > 0)
 	{
 		if (ft_strchr(buf, '\n'))
@@ -334,7 +340,7 @@ void	read_std_e(t_cli *cli)
 			return ;
 		}
 		execut_command(buf, cli);
-		ft_bzero(buf, BUF_E_READ +1);
+		ft_bzero(buf, BUF_E_READ + 1);
 	}
 }
 
@@ -412,7 +418,6 @@ void	ft_getgmsg(t_sms *sms, t_cli *cli)
 	(void)cli;
 	if (sms->sms[0] == '\0')
 		return ;
-
 	if (flag == -1 && ft_strrchr(sms->sms, '\n') != NULL)
 		flag = 1;
 	else if (flag == -1)
@@ -455,8 +460,8 @@ void	ft_getmsg(t_sms *sms, t_cli *cli)
 
 void	handle_command(t_cli *cli, t_sms *sms)
 {
-	int i;
-	static t_ccmd tab[] = {
+	int				i;
+	static t_ccmd	tab[] = {
 		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
 		{CREATE, &ft_getcreate}, {LIST, &ft_getlist}, {GMSG, &ft_getgmsg},
 		{DELET, &ft_getdelet}, {MSG, &ft_getmsg}, {WHO, &ft_getwho},
@@ -531,7 +536,7 @@ void	init_client(t_cli *cli)
 	cli->info.name[4] = '\0';
 }
 
-int		main(int ac, char ** av)
+int		main(int ac, char **av)
 {
 	t_cli	cli;
 
@@ -539,5 +544,5 @@ int		main(int ac, char ** av)
 	if (ac == 3)
 		cli.fds[1] = connect_client(av[1], ft_atoi(av[2]), &cli);
 	cli_loop(&cli);
-	return(0);
+	return (0);
 }

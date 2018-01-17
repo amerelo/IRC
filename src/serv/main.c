@@ -113,8 +113,8 @@ void	init_fd(t_env *e)
 
 void	ft_getnick(char *sms, t_env *e, int cs)
 {
-	int i;
-	char *tmp;
+	int		i;
+	char	*tmp;
 
 	i = 0;
 	while (i < e->maxfd)
@@ -241,21 +241,25 @@ void	ft_getwho(char *sms, t_env *e, int cs)
 	}
 }
 
-void	ft_getmsg(char *sms, t_env *e, int cs)
+void	free_tab(char **tab)
 {
-	char	**tab;
+	int i;
+
+	i = 0;
+	while (tab[i])
+	{
+		free(tab[i]);
+		i++;
+	}
+	free(tab);
+}
+
+void	write_in_buf(t_env *e, int cs, char **tab)
+{
 	int		i;
 	int		y;
 
-	tab = ft_strsplit(sms, ' ');
-	if (get_client_by_name(e, tab[1]) == -1)
-	{
-		send_to_client("ERROR", cs, WHO, NULL);
-		return ;
-	}
-	ft_strcpy(e->fds[cs].msg.user, tab[1]);
 	y = 2;
-	e->fds[cs].msg.global = 0;
 	while (tab[y])
 	{
 		i = 0;
@@ -263,14 +267,30 @@ void	ft_getmsg(char *sms, t_env *e, int cs)
 		{
 			if (e->fds[cs].msg.write == BUF_T)
 				e->fds[cs].msg.write = 0;
-			e->fds[cs].msg.buf_t[e->fds[cs].msg.write] = tab[y][i];
-			e->fds[cs].msg.write++;
-			i++;
+			e->fds[cs].msg.buf_t[e->fds[cs].msg.write++] = tab[y][i++];
 		}
-		e->fds[cs].msg.buf_t[e->fds[cs].msg.write] = ' ';
-		e->fds[cs].msg.write++;
+		e->fds[cs].msg.buf_t[e->fds[cs].msg.write++] = ' ';
 		y++;
 	}
+	e->fds[cs].msg.write--;
+	e->fds[cs].msg.buf_t[e->fds[cs].msg.write] = '\0';
+}
+
+void	ft_getmsg(char *sms, t_env *e, int cs)
+{
+	char	**tab;
+
+	tab = ft_strsplit(sms, ' ');
+	if (get_client_by_name(e, tab[1]) == -1)
+	{
+		send_to_client("ERROR", cs, WHO, NULL);
+		free_tab(tab);
+		return ;
+	}
+	ft_strcpy(e->fds[cs].msg.user, tab[1]);
+	e->fds[cs].msg.global = 0;
+	write_in_buf(e, cs, tab);
+	free_tab(tab);
 }
 
 void	ft_getgmsg(char *sms, t_env *e, int cs)
@@ -291,8 +311,8 @@ void	ft_getgmsg(char *sms, t_env *e, int cs)
 
 void	handle_command(t_env *e, t_sms *sms, int cs)
 {
-	int i;
-	static t_smd tab[] = {
+	int				i;
+	static t_smd	tab[] = {
 		{NICK, &ft_getnick}, {JOIN, &ft_getjoin}, {LEAVE, &ft_getleave},
 		{CREATE, &ft_getcreate}, {LIST, &ft_getlist}, {WHO, &ft_getwho},
 		{DELET, &ft_getdelet}, {MSG, &ft_getmsg}, {GMSG, &ft_getgmsg},
@@ -310,8 +330,8 @@ void	handle_command(t_env *e, t_sms *sms, int cs)
 
 void	send_packet(int cs, t_sms *sms)
 {
-	size_t	start;
-	unsigned char *send_addr;
+	size_t			start;
+	unsigned char	*send_addr;
 
 	start = 0;
 	while (start < sizeof(*sms))
@@ -365,7 +385,7 @@ void	read_client(t_env *e, int cs)
 		e->fds[cs].chan->connected -= 1;
 	close(cs);
 	clean_fd(&e->fds[cs]);
-	printf("client #%d gone away\n", cs);
+	ft_putendl("client gone away");
 }
 
 void	srv_accept(t_env *e, int s)
@@ -425,12 +445,10 @@ void	send_msg(t_env *e, int i)
 	if ((client = get_client_by_name(e, e->fds[i].msg.user)) >= 0)
 	{
 		format_msg(e, sms, i);
-		printf("mensaje enviado por -> %s\n", e->fds[i].name);
 		send_to_client(sms, client, MSG, e->fds[i].name);
 	}
 	else
 		send_to_client("ERROR", i, MSG, NULL);
-	e->fds[i].msg.read++;
 }
 
 void	system_gmsg(t_env *e, int cs, char *sms)
@@ -443,7 +461,6 @@ void	system_gmsg(t_env *e, int cs, char *sms)
 		if (i != cs && e->fds[i].client == 1 && (e->fds[i].chan &&
 		e->fds[cs].chan == e->fds[i].chan))
 		{
-			printf("mensaje enviado por -> %s\n", e->fds[i].name);
 			send_to_client(sms, i, GMSG, e->fds[cs].name);
 		}
 		i++;
@@ -465,7 +482,6 @@ void	send_gmsg(t_env *e, int cs)
 		if (i != cs && e->fds[i].client == 1 && (e->fds[i].chan &&
 		e->fds[cs].chan == e->fds[i].chan))
 		{
-			printf("mensaje enviado por -> %s\n", e->fds[i].name);
 			send_to_client(sms, i, GMSG, e->fds[cs].name);
 		}
 		i++;
@@ -481,7 +497,7 @@ void	send_msgs(t_env *e)
 	{
 		if (e->fds[i].client == 1 && e->fds[i].msg.global == 1 &&
 			e->fds[i].msg.write != e->fds[i].msg.read)
-				send_gmsg(e, i);
+			send_gmsg(e, i);
 		else if (e->fds[i].client == 1 && e->fds[i].msg.global == 0 &&
 			e->fds[i].msg.write != e->fds[i].msg.read)
 			send_msg(e, i);
@@ -507,21 +523,20 @@ void	check_fd(t_env *e)
 
 void	srv_create(t_env *e, int port)
 {
-	int		server_socket;
-	struct	sockaddr_in serv;
+	int					server_socket;
+	int					option_true;
+	struct sockaddr_in	serv;
 
 	if ((server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) == -1)
 		usage("socket fail");
-
-	ft_memset((char *) &serv, 0, sizeof(serv));
+	ft_memset((char *)&serv, 0, sizeof(serv));
 	serv.sin_family = AF_INET;
 	serv.sin_port = htons(port);
 	serv.sin_addr.s_addr = htonl(INADDR_ANY);
-
-	int option_true = 1;
+	option_true = 1;
 	setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &option_true,
 		sizeof(option_true));
-	if (bind(server_socket , (struct sockaddr*)&serv, sizeof(serv) ) == -1)
+	if (bind(server_socket, (struct sockaddr*)&serv, sizeof(serv)) == -1)
 		usage("socket fail");
 	if (listen(server_socket, 42) == -1)
 		usage("listen fail");
@@ -529,10 +544,10 @@ void	srv_create(t_env *e, int port)
 	e->fds[server_socket].fct_read = srv_accept;
 }
 
-int		main(int ac, char** av)
+int		main(int ac, char **av)
 {
 	if (ac != 2)
 		usage("need soket");
 	start(ft_atoi(av[1]));
-	return(0);
+	return (0);
 }
