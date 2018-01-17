@@ -17,14 +17,20 @@ int		connect_client(char *addr, int port, t_cli *cli)
 	int					sock;
 	struct protoent		*proto;
 	struct sockaddr_in	sin;
+	struct hostent		*he;
 
-	proto = getprotobyname("tcp");
-	if (proto == 0)
+	if ((proto = getprotobyname("tcp")) == 0)
 		return (-1);
 	sock = socket(PF_INET, SOCK_STREAM, proto->p_proto);
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(port);
-	sin.sin_addr.s_addr = inet_addr(addr);
+	if ((he = gethostbyname(addr)) == NULL)
+	{
+		ft_putendl("gethostbyname error");
+		return (-1);
+	}
+	sin.sin_addr.s_addr = inet_addr(
+		inet_ntoa(*((struct in_addr **)he->h_addr_list)[0]));
 	if (connect(sock, (const struct sockaddr*)&sin, sizeof(sin)) == -1)
 	{
 		ft_putendl("Connect error");
