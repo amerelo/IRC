@@ -6,7 +6,7 @@
 /*   By: amerelo <amerelo@student.42.fr>            +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2017/12/11 08:03:15 by amerelo           #+#    #+#             */
-/*   Updated: 2017/12/11 08:04:55 by amerelo          ###   ########.fr       */
+/*   Updated: 2018/01/17 05:24:42 by amerelo          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -19,15 +19,12 @@
 # include <netinet/in.h>
 # include <netdb.h>
 
-# include <stdio.h> //<< rm
-
 # define FD_FREE			0
 # define FD_SERV			1
 # define FD_CLIENT			2
 # define MAX_FD_CLI			2
 # define NAME_SIZE			9
 # define ROOM_NAME_SIZE		12
-
 # define BUF_E_READ			1024
 # define BUF_T				1024
 # define BUF_SUB			2
@@ -41,13 +38,13 @@
 #  error "Buffer subdivision is negative !"
 # endif
 
-#define SMS_MOD (SMS_PACKET_SIZE % BUF_SUB)
+# define SMS_MOD (SMS_PACKET_SIZE % BUF_SUB)
 
 # if SMS_MOD != 0
 #  error "Buffer subdivision size is not a multiple of packet size !"
 # endif
 
-enum types
+enum	e_types
 {
 	NONE,
 	CONNECT,
@@ -64,7 +61,7 @@ enum types
 
 typedef struct		s_sms_header
 {
-	enum types		mytype;
+	enum e_types	mytype;
 	char			user[NAME_SIZE + 1];
 }					t_sms_header;
 
@@ -95,7 +92,7 @@ typedef struct		s_fd
 	char			buf_read[BUF_SIZE + 1];
 	char			name[NAME_SIZE + 1];
 	t_msg			msg;
-	struct	s_chan	*chan;
+	struct s_chan	*chan;
 }					t_fd;
 
 typedef struct		s_info
@@ -114,7 +111,7 @@ typedef struct		s_cli
 	int				type2;
 	fd_set			fd_read;
 	int				fds[MAX_FD_CLI];
-	char			buf[BUF_SIZE +1];
+	char			buf[BUF_SIZE + 1];
 	t_info			info;
 }					t_cli;
 
@@ -122,7 +119,7 @@ typedef struct		s_chan
 {
 	int				connected;
 	char			name[ROOM_NAME_SIZE + 1];
-	struct	s_chan	*next;
+	struct s_chan	*next;
 }					t_chan;
 
 typedef struct		s_env
@@ -140,27 +137,81 @@ typedef struct		s_cmd
 {
 	char			c[ROOM_NAME_SIZE + 1];
 	void			(*cmds)(char*, t_cli *);
-} 					t_cmd;
+}					t_cmd;
 
 typedef struct		s_ccmd
 {
-	enum types 		type;
+	enum e_types	type;
 	void			(*ccmds)(t_sms *, t_cli *);
-} 					t_ccmd;
+}					t_ccmd;
 
 typedef struct		s_smd
 {
-	enum types 		type;
+	enum e_types	type;
 	void			(*cmds)(char*, t_env *, int);
-} 					t_smd;
+}					t_smd;
 
-void				send_to_client(char* txt, int cs, enum types type, char *name);
+void				srv_loop(t_env *e);
+void				send_packet(int cs, t_sms *sms);
+void				send_to_client(char *txt, int cs, enum e_types type,
+	char *name);
 void				system_gmsg(t_env *e, int cs, char *sms);
+void				send_msgs(t_env *e);
+void				send_gmsg(t_env *e, int cs);
+void				send_msg(t_env *e, int i);
+void				send_packet(int cs, t_sms *sms);
 void				srv_create(t_env *e, int port);
+void				system_gmsg(t_env *e, int cs, char *sms);
+void				srv_accept(t_env *e, int s);
+void				read_client(t_env *e, int cs);
+void				write_in_buf(t_env *e, int cs, char **tab);
 
-int					get_client_by_name(t_env *e, char *name);
-void				check_fd(t_env *e);
+void				handle_command(t_env *e, t_sms *sms, int cs);
+void				ft_getnick(char *sms, t_env *e, int cs);
+void				ft_getjoin(char *sms, t_env *e, int cs);
+void				ft_getleave(char *sms, t_env *e, int cs);
+void				ft_getdelet(char *sms, t_env *e, int cs);
+void				ft_getcreate(char *sms, t_env *e, int cs);
+void				ft_getlist(char *sms, t_env *e, int cs);
+
+void				init_env(t_env *e);
+void				init_list_chan(t_chan **head, char *name);
 void				init_fd(t_env *e);
-// void	clean_fd(t_fd *fd);
+void				check_fd(t_env *e);
+void				start(int port);
+void				clean_fd(t_fd *fd);
+void				usage(char *str);
+int					get_client_by_name(t_env *e, char *name);
+void				format_msg(t_env *e, char *sms, int cs);
+
+void				init_fdc(t_cli *cli);
+void				init_client(t_cli *cli);
+int					connect_client(char *addr, int port, t_cli *cli);
+void				chandle_command(t_cli *cli, t_sms *sms);
+void				send_to_serv(char *txt, t_cli *cli, enum e_types type);
+void				execut_command(char *cmd, t_cli *cli);
+
+void				ft_cgetdelet(t_sms *sms, t_cli *cli);
+void				ft_cgetlist(t_sms *sms, t_cli *cli);
+void				ft_cgetwho(t_sms *sms, t_cli *cli);
+void				ft_cgetgmsg(t_sms *sms, t_cli *cli);
+void				ft_cgetmsg(t_sms *sms, t_cli *cli);
+void				ft_cgetcreate(t_sms *sms, t_cli *cli);
+void				ft_cgetleave(t_sms *sms, t_cli *cli);
+void				ft_cgetjoin(t_sms *sms, t_cli *cli);
+void				ft_cgetnick(t_sms *sms, t_cli *cli);
+
+void				ft_sendconnect(char *buf, t_cli *cli);
+void				ft_sendnick(char *buf, t_cli *cli);
+void				ft_sendjoin(char *buf, t_cli *cli);
+void				ft_sendleave(char *buf, t_cli *cli);
+void				ft_sendcreate(char *buf, t_cli *cli);
+void				ft_senddelet(char *buf, t_cli *cli);
+
+void				cli_loop(t_cli *cli);
+void				cclean_fd(t_cli *cli);
+void				free_tab(char **tab);
+int					starter_check(t_cli *cli);
+int					verif_narg(char **tab, int limit);
 
 #endif

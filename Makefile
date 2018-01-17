@@ -11,8 +11,12 @@ OBJ = obj/
 DIR_OS = $(OBJ)serv/
 DIR_OC = $(OBJ)cli/
 
-FILE_SC = main.c
-FILE_CC = main.c
+FILE_SC = main.c serv_getcmd.c server_getcmd2.c server_init.c server_send.c \
+server_tools.c server.c
+
+
+FILE_CC = main.c init.c client_get.c client_get2.c client_recive.c \
+client_send2.c client_send.c client_connect.c client_tools.c
 
 FILE_SO = $(FILE_SC:.c=.o)
 FILE_CO = $(FILE_CC:.c=.o)
